@@ -1,3 +1,5 @@
+"""Global attribute validators for MLCast metadata."""
+
 import string
 from typing import Dict
 
@@ -22,6 +24,73 @@ DATASET_IDENTIFIER_ATTRIBUTE = "mlcast_dataset_identifier"
 DATASET_IDENTIFIER_FORMAT_ATTRIBUTE = "mlcast_dataset_identifier_format"
 EXPECTED_GITHUB_ORG = "mlcast-community"
 EXPECTED_REPO_PATTERN = "mlcast-dataset-{organisation_id}-{dataset_name}"
+
+
+def is_alphanumeric(value: str) -> bool:
+    """
+    Validate a dataset identifier token string.
+
+    Parameters
+    ----------
+    value : str
+        Token value to validate; must be non-empty, contain no whitespace, use only
+        alphanumerics plus '_' (hyphens are reserved as separators), and not start
+        or end with '_'.
+
+    Returns
+    -------
+    bool
+        True if valid.
+
+    Raises
+    ------
+    ValueError
+        If the token is invalid.
+    """
+    if not value:
+        raise ValueError("identifier token is empty")
+    if any(ch.isspace() for ch in value):
+        raise ValueError(f"identifier token contains whitespace: '{value}'")
+    if value[0] == "_" or value[-1] == "_":
+        raise ValueError(f"identifier token cannot start/end with '_': '{value}'")
+    if not all(ch.isalnum() or ch == "_" for ch in value):
+        raise ValueError(f"identifier token contains invalid characters: '{value}'")
+    return True
+
+
+def is_country_code(value: str) -> bool:
+    """
+    Validate an ISO 3166-1 alpha-2 style country code.
+
+    Parameters
+    ----------
+    value : str
+        Country code to validate.
+
+    Returns
+    -------
+    bool
+        True if valid.
+
+    Raises
+    ------
+    ValueError
+        If the country code is invalid.
+    """
+    if len(value) != 2:
+        raise ValueError("country code must be 2 uppercase letters")
+    if not value.isalpha() or not value.isupper():
+        raise ValueError("country code must use uppercase alphabetic characters")
+    return True
+
+
+IDENTIFIER_PART_VALIDATORS = {
+    "country_code": is_country_code,
+    "entity": is_alphanumeric,
+    "physical_variable": is_alphanumeric,
+    "time_resolution": isodate.parse_duration,
+    "common_name": is_alphanumeric,
+}
 
 _CREATED_BY_PARSER = parse_compile(CREATED_BY_FORMAT)
 _GITHUB_WITH_VERSION_PARSER = parse_compile(GITHUB_WITH_VERSION_FORMAT)
@@ -221,46 +290,6 @@ def extract_identifier_format_fields(format_str: str) -> list[str]:
     return fields
 
 
-def is_alphanumeric(value: str) -> bool:
-    """
-    Validate a dataset identifier token string.
-
-    Parameters
-    ----------
-    value : str
-        Token value to validate; must be non-empty, contain no whitespace, use only
-        alphanumerics plus '-' or '_', and not start or end with '-' or '_'.
-
-    Returns
-    -------
-    bool
-        True if valid.
-
-    Raises
-    ------
-    ValueError
-        If the token is invalid.
-    """
-    if not value:
-        raise ValueError("identifier token is empty")
-    if any(ch.isspace() for ch in value):
-        raise ValueError("identifier token contains whitespace")
-    if value[0] in "-_" or value[-1] in "-_":
-        raise ValueError("identifier token cannot start/end with '-' or '_'")
-    if not all(ch.isalnum() or ch in "-_" for ch in value):
-        raise ValueError("identifier token contains invalid characters")
-    return True
-
-
-IDENTIFIER_PART_VALIDATORS = {
-    "country_code": is_alphanumeric,
-    "entity": is_alphanumeric,
-    "physical_variable": is_alphanumeric,
-    "time_resolution": lambda value: is_alphanumeric(value)
-    and isodate.parse_duration(value),
-}
-
-
 def validate_identifier_format(format_str: str) -> list[str]:
     """
     Validate identifier format and return ordered field names.
@@ -361,6 +390,26 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
     -------
     ValidationReport
         Validation report with metadata checks.
+
+    Required global attributes
+    --------------------------
+    mlcast_created_on
+        ISO 8601 datetime string for dataset creation.
+    mlcast_created_by
+        Creator contact in 'Name <email>' format.
+    mlcast_created_with
+        GitHub URL of the creating software including version.
+    mlcast_dataset_version
+        Dataset specification version (semver or calver).
+    mlcast_dataset_identifier
+        Dataset identifier matching the dataset identifier format rules.
+
+    Optional global attributes
+    --------------------------
+    mlcast_dataset_identifier_format
+        Custom identifier format string. Must start with the default
+        '{country_code}-{entity}-{physical_variable}' and only use approved parts
+        listed in IDENTIFIER_PART_VALIDATORS.
     """
     report = ValidationReport()
     attrs = ds.attrs
