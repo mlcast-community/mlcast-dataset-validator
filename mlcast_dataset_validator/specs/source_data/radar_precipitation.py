@@ -267,7 +267,8 @@ def validate_dataset(
     >   - `mlcast_created_by`: Creator contact in `Name <email>` format.
     >   - `mlcast_created_with`: GitHub URL of the creating software including version (e.g., https://github.com/mlcast-community/mlcast-dataset-radklim@v0.1.0) and the repository/revision MUST exist.
     >   - `mlcast_dataset_version`: Dataset specification version (semver or calver).
-    >   - `mlcast_source_org_id`: Unique source organisation identifier formatted as `<iso-country-code>-<institution-identifier>`."
+    >   - `mlcast_dataset_identifier`: Unique dataset identifier formatted as `<country_code>-<entity>-<physical_variable>` by default.
+    >   - `mlcast_dataset_identifier_format`: OPTIONAL format string that MUST start with `<country_code>-<entity>-<physical_variable>` and MAY include only the approved identifier parts: `country_code`, `entity`, `physical_variable`, `time_resolution`."
     """
     report += check_mlcast_metadata(ds)
 

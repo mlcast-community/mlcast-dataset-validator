@@ -1,5 +1,7 @@
+import string
 from typing import Dict
 
+import isodate
 import requests
 import xarray as xr
 from isodate import ISO8601Error, parse_datetime
@@ -15,13 +17,14 @@ from . import SECTION_ID as PARENT_SECTION_ID
 SECTION_ID = f"{PARENT_SECTION_ID}.4"
 CREATED_BY_FORMAT = "{name} <{email}>"
 GITHUB_WITH_VERSION_FORMAT = "https://github.com/{org}/{repo}@{version}"
-SOURCE_ORG_ID_FORMAT = "{country}-{institution}"
+DEFAULT_DATASET_IDENTIFIER_FORMAT = "{country_code}-{entity}-{physical_variable}"
+DATASET_IDENTIFIER_ATTRIBUTE = "mlcast_dataset_identifier"
+DATASET_IDENTIFIER_FORMAT_ATTRIBUTE = "mlcast_dataset_identifier_format"
 EXPECTED_GITHUB_ORG = "mlcast-community"
 EXPECTED_REPO_PATTERN = "mlcast-dataset-{organisation_id}-{dataset_name}"
 
 _CREATED_BY_PARSER = parse_compile(CREATED_BY_FORMAT)
 _GITHUB_WITH_VERSION_PARSER = parse_compile(GITHUB_WITH_VERSION_FORMAT)
-_SOURCE_ORG_ID_PARSER = parse_compile(SOURCE_ORG_ID_FORMAT)
 _EXPECTED_REPO_PARSER = parse_compile(EXPECTED_REPO_PATTERN)
 _GITHUB_HEADERS = {
     "Accept": "application/vnd.github+json",
@@ -112,7 +115,26 @@ def parse_github_url_with_version(value: str) -> Dict[str, str]:
 
 
 def github_repo_exists(org: str, repo: str) -> bool:
-    """Return True if GitHub repository exists, False if 404, else raise on other issues."""
+    """
+    Return True if GitHub repository exists, False if 404, else raise on other issues.
+
+    Parameters
+    ----------
+    org : str
+        GitHub organisation name.
+    repo : str
+        GitHub repository name.
+
+    Returns
+    -------
+    bool
+        True if repository exists, False if not found.
+
+    Raises
+    ------
+    RuntimeError
+        If the GitHub API returns an unexpected response.
+    """
     base = f"https://api.github.com/repos/{org}/{repo}"
     response = requests.get(base, headers=_GITHUB_HEADERS, timeout=5)
     if response.status_code == 404:
@@ -129,6 +151,25 @@ def github_ref_exists(org: str, repo: str, ref: str) -> str | None:
     Check if a GitHub revision exists (tag, branch, or commit).
 
     Returns the matched API path if found, None if not found, otherwise raises.
+
+    Parameters
+    ----------
+    org : str
+        GitHub organisation name.
+    repo : str
+        GitHub repository name.
+    ref : str
+        Revision identifier (tag, branch, or commit hash).
+
+    Returns
+    -------
+    str or None
+        The matched API path if found, None if not found.
+
+    Raises
+    ------
+    RuntimeError
+        If the GitHub API returns an unexpected response.
     """
     base = f"https://api.github.com/repos/{org}/{repo}"
     ref_paths = [
@@ -148,19 +189,138 @@ def github_ref_exists(org: str, repo: str, ref: str) -> str | None:
     return None
 
 
-def parse_source_org_id(value: str) -> Dict[str, str]:
+def extract_identifier_format_fields(format_str: str) -> list[str]:
     """
-    Parse source organisation id '<ISO-country-code>-<institution-identifier>'.
+    Extract ordered field names from a format string.
+
+    Parameters
+    ----------
+    format_str : str
+        Format string to parse.
+
+    Returns
+    -------
+    list[str]
+        Ordered field names extracted from the format string.
+
+    Raises
+    ------
+    ValueError
+        If the format string contains unsupported fields or specifiers.
+    """
+    formatter = string.Formatter()
+    fields: list[str] = []
+    for _, field_name, format_spec, conversion in formatter.parse(format_str):
+        if field_name is None:
+            continue
+        if not field_name:
+            raise ValueError("Empty field name in format string")
+        if format_spec or conversion:
+            raise ValueError("Format specifiers and conversions are not supported")
+        fields.append(field_name)
+    return fields
+
+
+def is_alphanumeric(value: str) -> bool:
+    """
+    Validate a dataset identifier token string.
 
     Parameters
     ----------
     value : str
-        Source organisation identifier to parse.
+        Token value to validate; must be non-empty, contain no whitespace, use only
+        alphanumerics plus '-' or '_', and not start or end with '-' or '_'.
+
+    Returns
+    -------
+    bool
+        True if valid.
+
+    Raises
+    ------
+    ValueError
+        If the token is invalid.
+    """
+    if not value:
+        raise ValueError("identifier token is empty")
+    if any(ch.isspace() for ch in value):
+        raise ValueError("identifier token contains whitespace")
+    if value[0] in "-_" or value[-1] in "-_":
+        raise ValueError("identifier token cannot start/end with '-' or '_'")
+    if not all(ch.isalnum() or ch in "-_" for ch in value):
+        raise ValueError("identifier token contains invalid characters")
+    return True
+
+
+IDENTIFIER_PART_VALIDATORS = {
+    "country_code": is_alphanumeric,
+    "entity": is_alphanumeric,
+    "physical_variable": is_alphanumeric,
+    "time_resolution": lambda value: is_alphanumeric(value)
+    and isodate.parse_duration(value),
+}
+
+
+def validate_identifier_format(format_str: str) -> list[str]:
+    """
+    Validate identifier format and return ordered field names.
+
+    Parameters
+    ----------
+    format_str : str
+        Format string to validate.
+
+    Returns
+    -------
+    list[str]
+        Ordered field names extracted from the format string.
+
+    Raises
+    ------
+    ValueError
+        If the format string is invalid.
+    """
+    if not isinstance(format_str, str):
+        raise ValueError("Value is not a string")
+    trimmed = format_str.strip()
+    if not trimmed:
+        raise ValueError("Format string cannot be empty")
+    if not trimmed.startswith(DEFAULT_DATASET_IDENTIFIER_FORMAT):
+        raise ValueError(
+            f"Format must start with '{DEFAULT_DATASET_IDENTIFIER_FORMAT}'"
+        )
+    fields = extract_identifier_format_fields(trimmed)
+    required_parts = {"country_code", "entity", "physical_variable"}
+    missing = required_parts.difference(fields)
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise ValueError(f"Format missing required parts: {missing_list}")
+    unknown = [field for field in fields if field not in IDENTIFIER_PART_VALIDATORS]
+    if unknown:
+        unknown_list = ", ".join(sorted(set(unknown)))
+        raise ValueError(f"Format contains unsupported parts: {unknown_list}")
+    duplicates = [field for field in set(fields) if fields.count(field) > 1]
+    if duplicates:
+        dup_list = ", ".join(sorted(duplicates))
+        raise ValueError(f"Format contains duplicate parts: {dup_list}")
+    return fields
+
+
+def parse_dataset_identifier(value: str, format_str: str) -> Dict[str, str]:
+    """
+    Parse dataset identifier using the provided format string.
+
+    Parameters
+    ----------
+    value : str
+        Dataset identifier to parse.
+    format_str : str
+        Format string to parse with.
 
     Returns
     -------
     dict
-        Dictionary with keys 'country' and 'institution'.
+        Dictionary with parsed identifier parts.
 
     Raises
     ------
@@ -168,29 +328,40 @@ def parse_source_org_id(value: str) -> Dict[str, str]:
         If the value does not match or has invalid components.
     """
     try:
-        parsed = _SOURCE_ORG_ID_PARSER.parse(value.strip())
+        parser = parse_compile(format_str)
+    except Exception as exc:
+        raise ValueError(f"Could not compile format: {exc}")
+    try:
+        parsed = parser.parse(value.strip())
     except AttributeError:
         raise ValueError("Value is not a string")
     if not parsed:
-        raise ValueError("Does not match '<ISO-country-code>-<institution-identifier>'")
-    country = parsed["country"]
-    institution = parsed["institution"].strip()
-    if len(country) != 2:
-        raise ValueError("Country code must be 2 uppercase letters")
-    if not country.isalpha() or not country.isupper():
-        raise ValueError("Country code must use uppercase alphabetic characters")
-    if not institution:
-        raise ValueError("Missing institution identifier")
-    if institution[0] in "-_" or institution[-1] in "-_":
-        raise ValueError("Institution identifier cannot start/end with '-' or '_'")
-    if not all(ch.isalnum() or ch in "-_" for ch in institution):
-        raise ValueError("Institution identifier contains invalid characters")
-    return {"country": country, "institution": institution}
+        raise ValueError("Does not match dataset identifier format")
+    parts = {key: str(val).strip() for key, val in parsed.named.items()}
+    for key, validator in IDENTIFIER_PART_VALIDATORS.items():
+        if key in parts:
+            try:
+                validator(parts[key])
+            except (ISO8601Error, ValueError, TypeError) as exc:
+                raise ValueError(f"{key} {exc}") from exc
+    return parts
 
 
 @log_function_call
 def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
-    """Validate required MLCast-specific global attributes."""
+    """
+    Validate required MLCast-specific global attributes.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Dataset to validate.
+
+    Returns
+    -------
+    ValidationReport
+        Validation report with metadata checks.
+    """
     report = ValidationReport()
     attrs = ds.attrs
 
@@ -367,33 +538,72 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
                 f"Version '{dataset_version}' is not valid semver or calver: {exc}",
             )
 
-    source_org_id = attrs.get("mlcast_source_org_id")
-    if source_org_id is None:
+    dataset_identifier_format = attrs.get(DATASET_IDENTIFIER_FORMAT_ATTRIBUTE)
+    format_ok = True
+    if dataset_identifier_format is None:
+        identifier_format = DEFAULT_DATASET_IDENTIFIER_FORMAT
         report.add(
             SECTION_ID,
-            "Global attribute 'mlcast_source_org_id'",
-            "FAIL",
-            "Missing required source organisation identifier '<ISO-country-code>-<institution-identifier>'",
+            f"Global attribute '{DATASET_IDENTIFIER_FORMAT_ATTRIBUTE}'",
+            "PASS",
+            f"Default format used ({identifier_format})",
         )
     else:
         try:
-            parsed_source_org = parse_source_org_id(source_org_id)
-            detail = (
-                "Source organisation identifier present with expected pattern "
-                f"({parsed_source_org['country']}-{parsed_source_org['institution']})"
+            fields = validate_identifier_format(dataset_identifier_format)
+            identifier_format = dataset_identifier_format.strip()
+            field_list = ", ".join(fields)
+            report.add(
+                SECTION_ID,
+                f"Global attribute '{DATASET_IDENTIFIER_FORMAT_ATTRIBUTE}'",
+                "PASS",
+                f"Dataset identifier format accepted ({field_list})",
+            )
+        except ValueError as exc:
+            format_ok = False
+            identifier_format = None
+            report.add(
+                SECTION_ID,
+                f"Global attribute '{DATASET_IDENTIFIER_FORMAT_ATTRIBUTE}'",
+                "FAIL",
+                f"Dataset identifier format is invalid: {exc}",
+            )
+
+    dataset_identifier = attrs.get(DATASET_IDENTIFIER_ATTRIBUTE)
+    if dataset_identifier is None:
+        report.add(
+            SECTION_ID,
+            f"Global attribute '{DATASET_IDENTIFIER_ATTRIBUTE}'",
+            "FAIL",
+            "Missing required dataset identifier",
+        )
+    elif not format_ok or identifier_format is None:
+        report.add(
+            SECTION_ID,
+            f"Global attribute '{DATASET_IDENTIFIER_ATTRIBUTE}'",
+            "FAIL",
+            "Cannot validate dataset identifier because the format is invalid",
+        )
+    else:
+        try:
+            parsed_identifier = parse_dataset_identifier(
+                dataset_identifier, identifier_format
+            )
+            detail = ", ".join(
+                f"{key}={value}" for key, value in parsed_identifier.items()
             )
             report.add(
                 SECTION_ID,
-                "Global attribute 'mlcast_source_org_id'",
+                f"Global attribute '{DATASET_IDENTIFIER_ATTRIBUTE}'",
                 "PASS",
-                detail,
+                f"Dataset identifier parsed ({detail})",
             )
         except ValueError as exc:
             report.add(
                 SECTION_ID,
-                "Global attribute 'mlcast_source_org_id'",
+                f"Global attribute '{DATASET_IDENTIFIER_ATTRIBUTE}'",
                 "FAIL",
-                f"Identifier '{source_org_id}' does not match '<ISO-country-code>-<institution-identifier>': {exc}",
+                f"Dataset identifier '{dataset_identifier}' is invalid: {exc}",
             )
 
     return report
