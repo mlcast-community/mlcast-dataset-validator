@@ -23,6 +23,7 @@ from ...checks.data_vars.data_structure import check_data_structure
 from ...checks.data_vars.georeferencing import check_georeferencing
 from ...checks.global_attributes.conditional import check_conditional_global_attributes
 from ...checks.global_attributes.licensing import check_license
+from ...checks.global_attributes.mlcast_metadata import check_mlcast_metadata
 from ...checks.global_attributes.zarr_format import check_zarr_format
 from ...checks.tool_compatibility.cartopy import check_cartopy_compatibility
 from ...checks.tool_compatibility.gdal import check_gdal_compatibility
@@ -244,6 +245,19 @@ def validate_dataset(
         require_consolidated_if_v2=True,
         storage_options=storage_options,
     )
+
+    spec_text += """
+    ### 5.4 MLCast Metadata
+
+    > "The dataset MUST include the following global attributes:
+    >   - `mlcast_created_on`: ISO formatted datetime of dataset creation.
+    >   - `mlcast_created_by`: Creator contact in `Name <email>` format.
+    >   - `mlcast_created_with`: GitHub URL of the creating software including version (e.g., https://github.com/mlcast-community/mlcast-dataset-radklim@v0.1.0) and the repository/revision MUST exist.
+    >   - `mlcast_dataset_version`: Dataset specification version (semver or calver).
+    >   - `mlcast_dataset_identifier`: Unique dataset identifier formatted as `<country_code>-<entity>-<physical_variable>` by default.
+    >   - `mlcast_dataset_identifier_format`: OPTIONAL format string that MUST start with `<country_code>-<entity>-<physical_variable>` and MAY include only the approved identifier parts: `country_code`, `entity`, `physical_variable`, `time_resolution`, `common_name`."
+    """
+    report += check_mlcast_metadata(ds)
 
     spec_text += """
     ## 6. Tool Compatibility Requirements
