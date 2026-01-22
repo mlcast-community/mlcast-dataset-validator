@@ -4,7 +4,7 @@ import xarray as xr
 
 from ...specs.base import ValidationReport
 from ...utils.logging_decorator import log_function_call
-from ..coords.variable_timestep import analyze_dataset_timesteps
+from ..coords.temporal import analyze_dataset_timesteps
 from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.1"

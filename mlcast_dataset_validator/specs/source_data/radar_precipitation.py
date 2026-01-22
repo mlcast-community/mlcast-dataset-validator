@@ -15,7 +15,6 @@ from loguru import logger
 from ...checks.coords.names import check_coordinate_names
 from ...checks.coords.spatial import check_spatial_requirements
 from ...checks.coords.temporal import check_temporal_requirements
-from ...checks.coords.variable_timestep import check_variable_timestep
 from ...checks.data_vars import naming
 from ...checks.data_vars.chunking import check_chunking_strategy
 from ...checks.data_vars.compression import check_compression
@@ -87,7 +86,7 @@ def validate_dataset(
 
     > "The dataset MUST provide 2D radar composites with a spatial resolution of 1 kilometer or finer."
     > "The valid sensing area MUST support at least one 256×256 pixel square crop that is fully contained within the radar sensing range."
-    > "The spatial domain, including resolution, size, and geographical coverage, MUST remain constant across all timesteps in the archive."
+    > "The spatial domain, including resolution, size, and geographical coverage, MUST remain constant across all times in the archive."
     """
     report += check_spatial_requirements(
         ds,
@@ -99,23 +98,12 @@ def validate_dataset(
     spec_text += """
     ### 3.3 Temporal Requirements
 
-    > "The dataset MUST contain a minimum of 3 years of continuous temporal coverage."
-    > "The timestep MAY be variable throughout the archive."
+    - "The timestep (the duration for which a single data-point is valid) MAY be variable throughout the archive, but in that case a global attribute named `consistent_timestep_start` MUST be included to indicate the first timestamp where regular timestepping begins. In the absence of this attribute, the timestep MUST be regular throughout the archive."
+    - "Times for which data is missing MUST be given expicitly in the variable `missing_times` as CF-compliant time values. The timestep is defined as the interval between consecutive times (including missing times). These times MUST NOT be included in the main time coordinate."
     """
     report += check_temporal_requirements(
         ds,
         min_years=3,
-        allow_variable_timestep=True,
-    )
-
-    spec_text += """
-    ### 3.4 Variable Timestep Handling
-
-    > "If the archive contains variable timesteps, the timesteps SHOULD follow the natural timestepping of the data collection."
-    > "A global attribute named `consistent_timestep_start` MAY be included to indicate the first timestamp where regular timestepping begins."
-    """
-    report += check_variable_timestep(
-        ds,
         allow_variable_timestep=True,
     )
 

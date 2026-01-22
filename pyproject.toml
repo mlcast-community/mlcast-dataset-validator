@@ -30,6 +30,7 @@ dependencies = [
 dev = [
     "ipdb>=0.13.13",
     "pre-commit>=4.3.0",
+    "pytest>=9.0.2",
 ]
 tool-compat = [
     "cartopy>=0.25.0",
