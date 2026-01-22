@@ -206,18 +206,20 @@ def _check_missing_times_irregular_period(
     if da_pre_diffs.size < 2:
         return report
 
-    if missing_values is None:
-        if len(np.unique(da_pre_diffs.values)) > 1:
-            report.add(
-                SECTION_ID,
-                "Missing times metadata",
-                "FAIL",
-                "Missing 'missing_times' variable for irregular period",
-            )
+    pre_diff_values = da_pre_diffs.values
+    is_monotonic_decreasing = np.all(pre_diff_values[1:] <= pre_diff_values[:-1])
+    if is_monotonic_decreasing:
+        # as long as the irregular timesteps decrease monotonically, no warning is needed
+        # we expect the time resolution to decrease in time until the regular period begins
         return report
 
-    pre_diff_values = da_pre_diffs.values
-    if np.all(pre_diff_values[1:] <= pre_diff_values[:-1]):
+    if missing_values is None:
+        report.add(
+            SECTION_ID,
+            "Missing times metadata",
+            "FAIL",
+            "Missing 'missing_times' variable for irregular period",
+        )
         return report
 
     pre_interval = da_pre_diffs.min().item()
