@@ -74,9 +74,26 @@ def check_temporal_requirements(
 
 def _check_missing_times_metadata(
     ds: xr.Dataset,
-    time_coord: xr.DataArray,
+    da_time_coord: xr.DataArray,
     allow_variable_timestep: bool,
 ) -> ValidationReport:
+    """
+    Validate missing-times metadata against inferred gaps in the time series.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset containing time and optional missing_times metadata.
+    da_time_coord : xr.DataArray
+        Time coordinate values from the dataset.
+    allow_variable_timestep : bool
+        Whether variable timesteps are allowed by the specification.
+
+    Returns
+    -------
+    ValidationReport
+        Report describing missing_times validation outcomes.
+    """
     report = ValidationReport()
 
     try:
@@ -118,7 +135,7 @@ def _check_missing_times_metadata(
         )
         return report
 
-    time_values = time_coord.values
+    time_values = da_time_coord.values
     missing_values = missing_times_values.astype("datetime64[ns]")
 
     overlap = np.intersect1d(time_values, missing_values)
@@ -145,38 +162,96 @@ def _check_missing_times_metadata(
             )
             return report
 
-    if regular_start is not None:
-        pre_times = time_coord.where(time_coord < regular_start, drop=True)
-        if pre_times.size >= 2:
-            pre_diffs = pre_times.diff("time")
-            pre_diffs = pre_diffs.where(pre_diffs > np.timedelta64(0, "ns"), drop=True)
-            if pre_diffs.size:
-                pre_interval = pre_diffs.min().item()
-                expected_pre = pd.date_range(
-                    start=pre_times.values[0],
-                    end=pre_times.values[-1],
-                    freq=pd.to_timedelta(pre_interval),
-                ).values
-                missing_pre = np.setdiff1d(expected_pre, pre_times.values)
-                if missing_pre.size:
-                    missing_pre_range = missing_values[
-                        (missing_values >= expected_pre[0])
-                        & (missing_values <= expected_pre[-1])
-                    ]
-                    if missing_pre_range.size == 0:
-                        report.add(
-                            SECTION_ID,
-                            "Missing times metadata",
-                            "WARNING",
-                            "Missing timestamps inferred before consistent_timestep_start are not listed in 'missing_times'",
-                        )
-
     if regular_start is None:
-        regular_times = time_coord
+        da_time_irregular = None
+        da_time_regular = da_time_coord
     else:
-        regular_times = time_coord.where(time_coord >= regular_start, drop=True)
+        irregular_end = regular_start - np.timedelta64(1, "ns")
+        da_time_irregular = da_time_coord.sel(time=slice(None, irregular_end))
+        da_time_regular = da_time_coord.sel(time=slice(regular_start, None))
 
-    if regular_times.size < 2:
+    if da_time_irregular is not None:
+        report += _check_missing_times_irregular_period(
+            da_time_irregular, missing_values
+        )
+    report += _check_missing_times_regular_period(da_time_regular, missing_values)
+
+    return report
+
+
+def _check_missing_times_irregular_period(
+    da_time_coord: xr.DataArray | None,
+    missing_values: np.ndarray,
+) -> ValidationReport:
+    """
+    Check inferred missing timestamps before the regular-timestep period.
+
+    Parameters
+    ----------
+    da_time_coord : xr.DataArray | None
+        Time coordinate values before regular timesteps, if any.
+    missing_values : np.ndarray
+        Array of missing_times values as datetime64.
+    Returns
+    -------
+    ValidationReport
+        Report containing warnings for missing pre-regular timestamps.
+    """
+    report = ValidationReport()
+
+    if da_time_coord is None or da_time_coord.size < 2:
+        return report
+
+    da_pre_diffs = da_time_coord.diff("time")
+    da_pre_diffs = da_pre_diffs.where(da_pre_diffs > np.timedelta64(0, "ns"), drop=True)
+    if not da_pre_diffs.size:
+        return report
+
+    pre_interval = da_pre_diffs.min().item()
+    expected_pre = pd.date_range(
+        start=da_time_coord.values[0],
+        end=da_time_coord.values[-1],
+        freq=pd.to_timedelta(pre_interval),
+    ).values
+    missing_pre = np.setdiff1d(expected_pre, da_time_coord.values)
+    if not missing_pre.size:
+        return report
+
+    missing_pre_range = missing_values[
+        (missing_values >= expected_pre[0]) & (missing_values <= expected_pre[-1])
+    ]
+    if missing_pre_range.size == 0:
+        report.add(
+            SECTION_ID,
+            "Missing times metadata",
+            "WARNING",
+            "Missing timestamps inferred before consistent_timestep_start are not listed in 'missing_times'",
+        )
+
+    return report
+
+
+def _check_missing_times_regular_period(
+    da_time_coord: xr.DataArray,
+    missing_values: np.ndarray,
+) -> ValidationReport:
+    """
+    Check inferred missing timestamps within the regular-timestep period.
+
+    Parameters
+    ----------
+    da_time_coord : xr.DataArray
+        Time coordinate values for the regular-timestep period.
+    missing_values : np.ndarray
+        Array of missing_times values as datetime64.
+    Returns
+    -------
+    ValidationReport
+        Report containing pass/fail outcomes for missing_times coverage.
+    """
+    report = ValidationReport()
+
+    if da_time_coord.size < 2:
         report.add(
             SECTION_ID,
             "Missing times metadata",
@@ -185,9 +260,9 @@ def _check_missing_times_metadata(
         )
         return report
 
-    diffs = regular_times.diff("time")
-    diffs = diffs.where(diffs > np.timedelta64(0, "ns"), drop=True)
-    if diffs.size == 0:
+    da_diffs = da_time_coord.diff("time")
+    da_diffs = da_diffs.where(da_diffs > np.timedelta64(0, "ns"), drop=True)
+    if da_diffs.size == 0:
         report.add(
             SECTION_ID,
             "Missing times metadata",
@@ -196,13 +271,13 @@ def _check_missing_times_metadata(
         )
         return report
 
-    expected_interval = diffs.min().item()
+    expected_interval = da_diffs.min().item()
     expected_values = pd.date_range(
-        start=regular_times.values[0],
-        end=regular_times.values[-1],
+        start=da_time_coord.values[0],
+        end=da_time_coord.values[-1],
         freq=pd.to_timedelta(expected_interval),
     ).values
-    missing_inferred = np.setdiff1d(expected_values, regular_times.values)
+    missing_inferred = np.setdiff1d(expected_values, da_time_coord.values)
 
     if missing_inferred.size == 0:
         report.add(
@@ -252,8 +327,8 @@ def analyze_dataset_timesteps(ds: xr.Dataset) -> tuple[bool, int]:
 
     Notes
     -----
-    Results are cached using the dataset object's Python id to avoid redundant
-    computations when the same dataset instance is analyzed multiple times.
+    Results are cached using the dataset object to avoid redundant computations
+    when the same dataset instance is analyzed multiple times.
     """
     try:
         cached = _TIMESTEP_CACHE.get(ds)
@@ -262,13 +337,13 @@ def analyze_dataset_timesteps(ds: xr.Dataset) -> tuple[bool, int]:
     if cached is not None:
         return cached
 
-    time_coord = ds["time"]
-    if time_coord.size < 2:
+    da_time_coord = ds["time"]
+    if da_time_coord.size < 2:
         result = (False, 0)
     else:
-        diffs = time_coord.diff("time")
-        diffs = diffs.where(diffs > np.timedelta64(0, "ns"), drop=True)
-        unique_diff_count = len(np.unique(diffs.values))
+        da_diffs = da_time_coord.diff("time")
+        da_diffs = da_diffs.where(da_diffs > np.timedelta64(0, "ns"), drop=True)
+        unique_diff_count = len(np.unique(da_diffs.values))
         result = (unique_diff_count > 1, unique_diff_count)
 
     try:
