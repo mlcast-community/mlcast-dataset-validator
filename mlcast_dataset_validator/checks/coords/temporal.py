@@ -1,4 +1,5 @@
-from typing import Dict, Tuple
+import weakref
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,7 +12,9 @@ from . import SECTION_ID as PARENT_SECTION_ID
 SECTION_ID = f"{PARENT_SECTION_ID}.3"
 VARIABLE_TIMESTEP_SECTION_ID = f"{PARENT_SECTION_ID}.4"
 
-_TIMESTEP_CACHE: Dict[int, Tuple[bool, int]] = {}
+_TIMESTEP_CACHE: "weakref.WeakKeyDictionary[xr.Dataset, Tuple[bool, int]]" = (
+    weakref.WeakKeyDictionary()
+)  # Cache by dataset object to avoid id reuse collisions across tests.
 
 
 @log_function_call
@@ -335,8 +338,10 @@ def analyze_dataset_timesteps(ds: xr.Dataset) -> tuple[bool, int]:
     Results are cached using the dataset object's Python id to avoid redundant
     computations when the same dataset instance is analyzed multiple times.
     """
-    cache_key = id(ds)
-    cached = _TIMESTEP_CACHE.get(cache_key)
+    try:
+        cached = _TIMESTEP_CACHE.get(ds)
+    except TypeError:
+        cached = None
     if cached is not None:
         return cached
 
@@ -356,5 +361,8 @@ def analyze_dataset_timesteps(ds: xr.Dataset) -> tuple[bool, int]:
         unique_diff_count = len(unique_diffs)
         result = (unique_diff_count > 1, unique_diff_count)
 
-    _TIMESTEP_CACHE[cache_key] = result
+    try:
+        _TIMESTEP_CACHE[ds] = result
+    except TypeError:
+        pass
     return result
