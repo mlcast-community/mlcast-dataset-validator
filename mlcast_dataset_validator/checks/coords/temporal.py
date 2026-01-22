@@ -10,96 +10,10 @@ from ...utils.logging_decorator import log_function_call
 from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.3"
-VARIABLE_TIMESTEP_SECTION_ID = f"{PARENT_SECTION_ID}.4"
 
 _TIMESTEP_CACHE: "weakref.WeakKeyDictionary[xr.Dataset, Tuple[bool, int]]" = (
     weakref.WeakKeyDictionary()
 )  # Cache by dataset object to avoid id reuse collisions across tests.
-
-
-@log_function_call
-def check_variable_timestep(
-    ds: xr.Dataset,
-    *,
-    allow_variable_timestep: bool,
-) -> ValidationReport:
-    """
-    Validate whether the dataset's timestep pattern satisfies the specification.
-
-    Parameters
-    ----------
-    ds : xr.Dataset
-        Dataset to evaluate.
-    allow_variable_timestep : bool
-        Whether multiple unique intervals are allowed by the spec variant.
-
-    Returns
-    -------
-    ValidationReport
-        Populated report describing the outcome of each timestep-related rule.
-    """
-    report = ValidationReport()
-
-    if "time" not in ds.coords:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Time coordinate presence",
-            "FAIL",
-            "Missing 'time' coordinate",
-        )
-        return report
-
-    try:
-        has_variable, unique_diff_count = analyze_dataset_timesteps(ds)
-    except Exception as e:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Variable timestep analysis",
-            "FAIL",
-            f"Failed to analyze variable timesteps: {e}",
-        )
-        return report
-
-    if not has_variable:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Timestep consistency",
-            "PASS",
-            "Timestep is consistent throughout the dataset",
-        )
-        return report
-
-    if allow_variable_timestep:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Variable timestep handling",
-            "PASS",
-            f"Variable timesteps detected with {unique_diff_count} unique intervals",
-        )
-    else:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Variable timestep handling",
-            "FAIL",
-            "Variable timesteps detected but not allowed",
-        )
-
-    if "consistent_timestep_start" in ds.attrs:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Consistent timestep start metadata",
-            "PASS",
-            "Dataset includes 'consistent_timestep_start' metadata",
-        )
-    else:
-        report.add(
-            VARIABLE_TIMESTEP_SECTION_ID,
-            "Consistent timestep start metadata",
-            "WARNING",
-            "Dataset has variable timesteps but is missing 'consistent_timestep_start' metadata",
-        )
-
-    return report
 
 
 @log_function_call
@@ -154,6 +68,17 @@ def check_temporal_requirements(
         )
         return report
 
+    report += _check_missing_times_metadata(ds, ds["time"], allow_variable_timestep)
+    return report
+
+
+def _check_missing_times_metadata(
+    ds: xr.Dataset,
+    time_coord: xr.DataArray,
+    allow_variable_timestep: bool,
+) -> ValidationReport:
+    report = ValidationReport()
+
     try:
         has_variable_timestep, _ = analyze_dataset_timesteps(ds)
     except Exception as e:
@@ -193,12 +118,8 @@ def check_temporal_requirements(
         )
         return report
 
-    try:
-        time_values = time_coord.asi8
-    except AttributeError:
-        time_values = pd.Series(time_coord).astype("int64").to_numpy()
-
-    missing_values = missing_times_values.astype("datetime64[ns]").astype("int64")
+    time_values = time_coord.values
+    missing_values = missing_times_values.astype("datetime64[ns]")
 
     overlap = np.intersect1d(time_values, missing_values)
     if overlap.size:
@@ -225,20 +146,18 @@ def check_temporal_requirements(
             return report
 
     if regular_start is not None:
-        pre_mask = time_coord < regular_start
-        pre_values = time_values[pre_mask]
-        if len(pre_values) >= 2:
-            pre_diffs = np.diff(pre_values)
-            pre_diffs = pre_diffs[pre_diffs > 0]
+        pre_times = time_coord.where(time_coord < regular_start, drop=True)
+        if pre_times.size >= 2:
+            pre_diffs = pre_times.diff("time")
+            pre_diffs = pre_diffs.where(pre_diffs > np.timedelta64(0, "ns"), drop=True)
             if pre_diffs.size:
-                pre_interval = int(pre_diffs.min())
-                expected_pre = np.arange(
-                    int(pre_values[0]),
-                    int(pre_values[-1]) + pre_interval,
-                    pre_interval,
-                    dtype="int64",
-                )
-                missing_pre = np.setdiff1d(expected_pre, pre_values)
+                pre_interval = pre_diffs.min().item()
+                expected_pre = pd.date_range(
+                    start=pre_times.values[0],
+                    end=pre_times.values[-1],
+                    freq=pd.to_timedelta(pre_interval),
+                ).values
+                missing_pre = np.setdiff1d(expected_pre, pre_times.values)
                 if missing_pre.size:
                     missing_pre_range = missing_values[
                         (missing_values >= expected_pre[0])
@@ -253,12 +172,11 @@ def check_temporal_requirements(
                         )
 
     if regular_start is None:
-        regular_mask = np.ones(time_values.shape, dtype=bool)
+        regular_times = time_coord
     else:
-        regular_mask = time_coord >= regular_start
+        regular_times = time_coord.where(time_coord >= regular_start, drop=True)
 
-    regular_values = time_values[regular_mask]
-    if len(regular_values) < 2:
+    if regular_times.size < 2:
         report.add(
             SECTION_ID,
             "Missing times metadata",
@@ -267,8 +185,8 @@ def check_temporal_requirements(
         )
         return report
 
-    diffs = np.diff(regular_values)
-    diffs = diffs[diffs > 0]
+    diffs = regular_times.diff("time")
+    diffs = diffs.where(diffs > np.timedelta64(0, "ns"), drop=True)
     if diffs.size == 0:
         report.add(
             SECTION_ID,
@@ -278,14 +196,13 @@ def check_temporal_requirements(
         )
         return report
 
-    expected_interval = int(diffs.min())
-    expected_values = np.arange(
-        int(regular_values[0]),
-        int(regular_values[-1]) + expected_interval,
-        expected_interval,
-        dtype="int64",
-    )
-    missing_inferred = np.setdiff1d(expected_values, regular_values)
+    expected_interval = diffs.min().item()
+    expected_values = pd.date_range(
+        start=regular_times.values[0],
+        end=regular_times.values[-1],
+        freq=pd.to_timedelta(expected_interval),
+    ).values
+    missing_inferred = np.setdiff1d(expected_values, regular_times.values)
 
     if missing_inferred.size == 0:
         report.add(
@@ -296,8 +213,8 @@ def check_temporal_requirements(
         )
         return report
 
-    missing_inferred_set = set(int(val) for val in missing_inferred)
-    missing_values_set = set(int(val) for val in missing_values)
+    missing_inferred_set = set(missing_inferred.tolist())
+    missing_values_set = set(missing_values.tolist())
     missing_unlisted = missing_inferred_set - missing_values_set
 
     if missing_unlisted:
@@ -345,20 +262,13 @@ def analyze_dataset_timesteps(ds: xr.Dataset) -> tuple[bool, int]:
     if cached is not None:
         return cached
 
-    time_index = pd.to_datetime(ds.time.values)
-    try:
-        raw_values = time_index.asi8
-    except AttributeError:
-        raw_values = pd.Series(time_index).astype("int64").to_numpy()
-
-    if len(raw_values) < 2:
+    time_coord = ds["time"]
+    if time_coord.size < 2:
         result = (False, 0)
     else:
-        unique_diffs = {
-            int(raw_values[idx + 1]) - int(raw_values[idx])
-            for idx in range(len(raw_values) - 1)
-        }
-        unique_diff_count = len(unique_diffs)
+        diffs = time_coord.diff("time")
+        diffs = diffs.where(diffs > np.timedelta64(0, "ns"), drop=True)
+        unique_diff_count = len(np.unique(diffs.values))
         result = (unique_diff_count > 1, unique_diff_count)
 
     try:
