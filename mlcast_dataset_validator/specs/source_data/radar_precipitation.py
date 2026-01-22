@@ -98,7 +98,7 @@ def validate_dataset(
     spec_text += """
     ### 3.3 Temporal Requirements
 
-    - "The timestep (the duration for which a single data-point is valid) MAY be variable throughout the archive, but in that case a global attribute named `consistent_timestep_start` MUST be included to indicate the first timestamp where regular timestepping begins. In the absence of this attribute, the timestep MUST be regular throughout the archive."
+    - "The timestep (the duration between successive time values for which a single data-point is valid) MAY be variable throughout the archive, but in that case a global attribute named `consistent_timestep_start` MUST be included to indicate the first timestamp where regular timestepping begins. In the absence of this attribute, the timestep MUST be regular throughout the archive."
     - "Times for which data is missing MUST be given expicitly in the variable `missing_times` as CF-compliant time values. The timestep is defined as the interval between consecutive times (including missing times). These times MUST NOT be included in the main time coordinate."
     - "Time values MUST be strictly monotonically increasing."
     """
