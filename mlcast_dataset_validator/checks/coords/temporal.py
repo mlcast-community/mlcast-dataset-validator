@@ -96,63 +96,11 @@ def _check_missing_times_metadata(
     """
     report = ValidationReport()
 
-    try:
-        has_variable_timestep, _ = analyze_dataset_timesteps(ds)
-    except Exception as e:
-        report.add(
-            SECTION_ID,
-            "Missing times metadata",
-            "FAIL",
-            f"Failed to analyze timestep variability: {e}",
-        )
-        return report
-
-    if not has_variable_timestep and "missing_times" not in ds.variables:
-        report.add(
-            SECTION_ID,
-            "Missing times metadata",
-            "PASS",
-            "Regular timestep detected; 'missing_times' not required",
-        )
-        return report
-
-    if has_variable_timestep and "missing_times" not in ds.variables:
-        report.add(
-            SECTION_ID,
-            "Missing times metadata",
-            "FAIL",
-            "Missing 'missing_times' variable",
-        )
-        return report
-
-    missing_times_values = ds["missing_times"].values
-    if not np.issubdtype(missing_times_values.dtype, np.datetime64):
-        report.add(
-            SECTION_ID,
-            "Missing times metadata",
-            "FAIL",
-            "'missing_times' must contain datetime64 values",
-        )
-        return report
-
-    time_values = da_time_coord.values
-    missing_values = missing_times_values.astype("datetime64[ns]")
-
-    overlap = np.intersect1d(time_values, missing_values)
-    if overlap.size:
-        report.add(
-            SECTION_ID,
-            "Missing times metadata",
-            "FAIL",
-            "'missing_times' values must not appear in the main time coordinate",
-        )
-        return report
-
     consistent_start_raw = ds.attrs.get("consistent_timestep_start")
-    regular_start = None
+    t_regular_start = None
     if allow_variable_timestep and consistent_start_raw is not None:
         try:
-            regular_start = pd.to_datetime(consistent_start_raw)
+            t_regular_start = pd.to_datetime(consistent_start_raw)
         except Exception as e:
             report.add(
                 SECTION_ID,
@@ -162,26 +110,76 @@ def _check_missing_times_metadata(
             )
             return report
 
-    if regular_start is None:
+    if t_regular_start is None:
         da_time_irregular = None
         da_time_regular = da_time_coord
     else:
-        irregular_end = regular_start - np.timedelta64(1, "ns")
+        irregular_end = t_regular_start - np.timedelta64(1, "ns")
         da_time_irregular = da_time_coord.sel(time=slice(None, irregular_end))
-        da_time_regular = da_time_coord.sel(time=slice(regular_start, None))
+        da_time_regular = da_time_coord.sel(time=slice(t_regular_start, None))
+
+    missing_times_present = "missing_times" in ds.variables
+    if not missing_times_present:
+        # no missing_times variable present
+        missing_values_irregular = None
+        missing_values_regular = None
+    else:
+        # split the missing_times variable into the two time periods, where
+        # irregular and regular timesteps are expected
+        missing_times_values = ds["missing_times"].values
+        if not np.issubdtype(missing_times_values.dtype, np.datetime64):
+            report.add(
+                SECTION_ID,
+                "Missing times metadata",
+                "FAIL",
+                "'missing_times' must contain datetime64 values",
+            )
+            return report
+
+        time_values = da_time_coord.values
+        missing_values = missing_times_values.astype("datetime64[ns]")
+
+        overlap = np.intersect1d(time_values, missing_values)
+        if overlap.size:
+            report.add(
+                SECTION_ID,
+                "Missing times metadata",
+                "FAIL",
+                "'missing_times' values must not appear in the main time coordinate",
+            )
+            return report
+
+        if t_regular_start is None:
+            # all missing_times pertain to regular period
+            missing_values_irregular = None
+            missing_values_regular = missing_values
+        else:
+            # split missing_times into irregular and regular periods
+            missing_values_irregular = missing_values[missing_values < t_regular_start]
+            missing_values_regular = missing_values[missing_values >= t_regular_start]
 
     if da_time_irregular is not None:
         report += _check_missing_times_irregular_period(
-            da_time_irregular, missing_values
+            da_time_irregular, missing_values_irregular
         )
-    report += _check_missing_times_regular_period(da_time_regular, missing_values)
+    report += _check_missing_times_regular_period(
+        da_time_regular, missing_values_regular
+    )
+
+    if not missing_times_present and not report.has_fails():
+        report.add(
+            SECTION_ID,
+            "Missing times metadata",
+            "PASS",
+            "Regular timesteps detected; 'missing_times' not required",
+        )
 
     return report
 
 
 def _check_missing_times_irregular_period(
     da_time_coord: xr.DataArray | None,
-    missing_values: np.ndarray,
+    missing_values: np.ndarray | None,
 ) -> ValidationReport:
     """
     Check irregular timesteps before the regular-timestep period.
@@ -190,8 +188,8 @@ def _check_missing_times_irregular_period(
     ----------
     da_time_coord : xr.DataArray | None
         Time coordinate values before regular timesteps, if any.
-    missing_values : np.ndarray
-        Array of missing_times values as datetime64.
+    missing_values : np.ndarray | None
+        Array of missing_times values as datetime64, if provided.
     Returns
     -------
     ValidationReport
@@ -206,6 +204,16 @@ def _check_missing_times_irregular_period(
     da_pre_diffs = da_time_coord.diff("time")
     da_pre_diffs = da_pre_diffs.where(da_pre_diffs > np.timedelta64(0, "ns"), drop=True)
     if da_pre_diffs.size < 2:
+        return report
+
+    if missing_values is None:
+        if len(np.unique(da_pre_diffs.values)) > 1:
+            report.add(
+                SECTION_ID,
+                "Missing times metadata",
+                "FAIL",
+                "Missing 'missing_times' variable for irregular period",
+            )
         return report
 
     pre_diff_values = da_pre_diffs.values
@@ -235,7 +243,7 @@ def _check_missing_times_irregular_period(
 
 def _check_missing_times_regular_period(
     da_time_coord: xr.DataArray,
-    missing_values: np.ndarray,
+    missing_values: np.ndarray | None,
 ) -> ValidationReport:
     """
     Check inferred missing timestamps within the regular-timestep period.
@@ -244,8 +252,8 @@ def _check_missing_times_regular_period(
     ----------
     da_time_coord : xr.DataArray
         Time coordinate values for the regular-timestep period.
-    missing_values : np.ndarray
-        Array of missing_times values as datetime64.
+    missing_values : np.ndarray | None
+        Array of missing_times values as datetime64, if provided.
     Returns
     -------
     ValidationReport
@@ -271,6 +279,16 @@ def _check_missing_times_regular_period(
             "WARNING",
             "Unable to infer timestep from regular timestamps",
         )
+        return report
+
+    if missing_values is None:
+        if len(np.unique(da_diffs.values)) > 1:
+            report.add(
+                SECTION_ID,
+                "Missing times metadata",
+                "FAIL",
+                "Missing 'missing_times' variable for regular period",
+            )
         return report
 
     expected_interval = da_diffs.min().item()
