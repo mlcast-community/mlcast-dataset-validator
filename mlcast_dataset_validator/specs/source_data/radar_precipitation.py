@@ -187,7 +187,7 @@ def validate_dataset(
     spec_text += """
     ### 5.1 Conditional Global Attributes
 
-    > "The following global attribute is CONDITIONAL: `consistent_timestep_start`."
+    > "The global attribute `consistent_timestep_start` is CONDITIONALLY REQUIRED if the dataset uses a variable timestep. It MUST be an ISO formatted datetime string indicating the first timestamp where regular timestepping begins."
     """
     report += check_conditional_global_attributes(
         ds,
