@@ -104,7 +104,7 @@ def test_missing_times_pass_when_missing_timestamp_listed():
     assert not report.has_fails()
 
 
-def test_missing_times_not_required_before_consistent_timestep_start():
+def test_warning_for_missing_times_before_consistent_timestep_start():
     """
     Warns when missing timestamps appear before consistent_timestep_start with no missing_times in that range.
 
@@ -127,3 +127,31 @@ def test_missing_times_not_required_before_consistent_timestep_start():
     report = check_temporal_requirements(ds, min_years=0, allow_variable_timestep=True)
 
     assert report.has_warnings()
+
+
+def test_pass_for_missing_times_before_consistent_timestep_start():
+    """
+    With missing_times listed before consistent_timestep_start no warnings should be issued.
+
+    Timeline: 00-02-04-05-(06 missing)-07 | 08-09-10 (regular)
+    """
+    time_values = [
+        "2020-01-01T00:00:00",
+        "2020-01-01T02:00:00",  # 2hr timestep
+        "2020-01-01T04:00:00",  # 2hr timestep
+        "2020-01-01T05:00:00",  # 1hr timestep
+        "2020-01-01T07:00:00",  # should be 06:00 missing for 1hr timestep, but 06:00 is missing
+        "2020-01-01T08:00:00",  # 1hr, regular timesteps begin
+        "2020-01-01T09:00:00",
+        "2020-01-01T10:00:00",
+    ]
+    ds = _make_dataset(
+        time_values,
+        missing_times=["2020-01-01T06:00:00"],
+        attrs={"consistent_timestep_start": "2020-01-01T08:00:00"},
+    )
+
+    report = check_temporal_requirements(ds, min_years=0, allow_variable_timestep=True)
+
+    assert not report.has_fails()
+    assert not report.has_warnings()

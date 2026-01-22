@@ -184,7 +184,7 @@ def _check_missing_times_irregular_period(
     missing_values: np.ndarray,
 ) -> ValidationReport:
     """
-    Check inferred missing timestamps before the regular-timestep period.
+    Check irregular timesteps before the regular-timestep period.
 
     Parameters
     ----------
@@ -195,7 +195,8 @@ def _check_missing_times_irregular_period(
     Returns
     -------
     ValidationReport
-        Report containing warnings for missing pre-regular timestamps.
+        Report containing warnings when irregular timesteps do not monotonically
+        decrease in size and missing_times do not resolve the inconsistency.
     """
     report = ValidationReport()
 
@@ -204,7 +205,11 @@ def _check_missing_times_irregular_period(
 
     da_pre_diffs = da_time_coord.diff("time")
     da_pre_diffs = da_pre_diffs.where(da_pre_diffs > np.timedelta64(0, "ns"), drop=True)
-    if not da_pre_diffs.size:
+    if da_pre_diffs.size < 2:
+        return report
+
+    pre_diff_values = da_pre_diffs.values
+    if np.all(pre_diff_values[1:] <= pre_diff_values[:-1]):
         return report
 
     pre_interval = da_pre_diffs.min().item()
@@ -214,18 +219,15 @@ def _check_missing_times_irregular_period(
         freq=pd.to_timedelta(pre_interval),
     ).values
     missing_pre = np.setdiff1d(expected_pre, da_time_coord.values)
-    if not missing_pre.size:
-        return report
-
     missing_pre_range = missing_values[
         (missing_values >= expected_pre[0]) & (missing_values <= expected_pre[-1])
     ]
-    if missing_pre_range.size == 0:
+    if missing_pre.size and missing_pre_range.size == 0:
         report.add(
             SECTION_ID,
             "Missing times metadata",
             "WARNING",
-            "Missing timestamps inferred before consistent_timestep_start are not listed in 'missing_times'",
+            "Irregular timesteps do not monotonically decrease and missing_times are not provided to resolve them",
         )
 
     return report
