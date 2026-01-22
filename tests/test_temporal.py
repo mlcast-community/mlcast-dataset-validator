@@ -181,3 +181,21 @@ def test_pass_monotonic_variable_timestep_before_consistent_timestep_start():
 
     assert not report.has_fails()
     assert not report.has_warnings()
+
+
+def test_variable_timestep_not_allowed_fails():
+    """Variable timesteps fail when not allowed.
+
+    Timeline: 00-01-(02 missing)-03-04
+    """
+    time_values = [
+        "2020-01-01T00:00:00",
+        "2020-01-01T01:00:00",
+        "2020-01-01T03:00:00",
+        "2020-01-01T04:00:00",
+    ]
+    ds = _make_dataset(time_values)
+
+    report = check_temporal_requirements(ds, min_years=0, allow_variable_timestep=False)
+
+    assert report.has_fails()
