@@ -104,6 +104,23 @@ def test_missing_times_pass_when_missing_timestamp_listed():
     assert not report.has_fails()
 
 
+def test_time_values_must_be_monotonically_increasing():
+    """Fails when time values are not strictly increasing.
+
+    Timeline: 00-02-01 (decreasing step)
+    """
+    time_values = [
+        "2020-01-01T00:00:00",
+        "2020-01-01T02:00:00",
+        "2020-01-01T01:00:00",
+    ]
+    ds = _make_dataset(time_values)
+
+    report = check_temporal_requirements(ds, min_years=0, allow_variable_timestep=True)
+
+    assert report.has_fails()
+
+
 def test_warning_for_missing_times_before_consistent_timestep_start():
     """
     Warns when missing timestamps appear before consistent_timestep_start with no missing_times in that range.

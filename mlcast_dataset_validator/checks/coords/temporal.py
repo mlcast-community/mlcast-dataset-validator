@@ -41,6 +41,18 @@ def check_temporal_requirements(
         )
         return report
 
+    da_time_coord = ds["time"]
+    if da_time_coord.size >= 2:
+        da_time_diffs = da_time_coord.diff("time")
+        if not np.all(da_time_diffs.values > np.timedelta64(0, "ns")):
+            report.add(
+                SECTION_ID,
+                "Time coordinate ordering",
+                "FAIL",
+                "Time coordinate must be strictly increasing",
+            )
+            return report
+
     try:
         time_coord = pd.to_datetime(ds.time.values)
         time_range = time_coord[-1] - time_coord[0]
@@ -202,7 +214,6 @@ def _check_missing_times_irregular_period(
         return report
 
     da_pre_diffs = da_time_coord.diff("time")
-    da_pre_diffs = da_pre_diffs.where(da_pre_diffs > np.timedelta64(0, "ns"), drop=True)
     if da_pre_diffs.size < 2:
         return report
 
@@ -273,7 +284,6 @@ def _check_missing_times_regular_period(
         return report
 
     da_diffs = da_time_coord.diff("time")
-    da_diffs = da_diffs.where(da_diffs > np.timedelta64(0, "ns"), drop=True)
     if da_diffs.size == 0:
         report.add(
             SECTION_ID,
