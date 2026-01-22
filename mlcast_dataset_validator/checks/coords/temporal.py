@@ -148,7 +148,7 @@ def _check_missing_times_metadata(
             )
             return report
 
-        time_values = da_time_coord.values
+        time_values = da_time_coord.values.astype("datetime64[ns]")
         missing_values = missing_times_values.astype("datetime64[ns]")
 
         overlap = np.intersect1d(time_values, missing_values)
@@ -234,12 +234,13 @@ def _check_missing_times_irregular_period(
         return report
 
     pre_interval = da_pre_diffs.min().item()
+    da_time_values = da_time_coord.values.astype("datetime64[ns]")
     expected_pre = pd.date_range(
-        start=da_time_coord.values[0],
-        end=da_time_coord.values[-1],
+        start=da_time_values[0],
+        end=da_time_values[-1],
         freq=pd.to_timedelta(pre_interval),
     ).values
-    missing_pre = np.setdiff1d(expected_pre, da_time_coord.values)
+    missing_pre = np.setdiff1d(expected_pre, da_time_values)
     missing_pre_range = missing_values[
         (missing_values >= expected_pre[0]) & (missing_values <= expected_pre[-1])
     ]
@@ -304,12 +305,13 @@ def _check_missing_times_regular_period(
         return report
 
     expected_interval = da_diffs.min().item()
+    da_time_values = da_time_coord.values.astype("datetime64[ns]")
     expected_values = pd.date_range(
-        start=da_time_coord.values[0],
-        end=da_time_coord.values[-1],
+        start=da_time_values[0],
+        end=da_time_values[-1],
         freq=pd.to_timedelta(expected_interval),
     ).values
-    missing_inferred = np.setdiff1d(expected_values, da_time_coord.values)
+    missing_inferred = np.setdiff1d(expected_values, da_time_values)
 
     if missing_inferred.size == 0:
         report.add(
