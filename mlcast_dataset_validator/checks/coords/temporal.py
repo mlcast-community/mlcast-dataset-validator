@@ -325,11 +325,13 @@ def _check_missing_times_regular_period(
     missing_unlisted = missing_inferred_set - missing_values_set
 
     if missing_unlisted:
+        missing_list = sorted(missing_unlisted)
         report.add(
             SECTION_ID,
             "Missing times metadata",
             "FAIL",
-            f"{len(missing_unlisted)} inferred missing timestamps are not listed in 'missing_times'",
+            "Inferred missing timestamps are not listed in 'missing_times': "
+            f"{missing_list}. Define these in 'missing_times' if the data is actually missing.",
         )
     else:
         report.add(
