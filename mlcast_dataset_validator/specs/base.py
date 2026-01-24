@@ -135,3 +135,12 @@ class ValidationReport:
             bool: True if there is at least one FAIL result, False otherwise.
         """
         return any(r.status == "FAIL" for r in self.results)
+
+    def has_warnings(self) -> bool:
+        """
+        Check if the report contains any WARNING results.
+
+        Returns:
+            bool: True if there is at least one WARNING result, False otherwise.
+        """
+        return any(r.status == "WARNING" for r in self.results)
