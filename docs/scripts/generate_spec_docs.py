@@ -78,6 +78,24 @@ def _discover_catalog() -> Dict[str, List[str]]:
     return catalog
 
 
+def _extract_frontmatter(spec_text: str) -> tuple[dict, str]:
+    text = textwrap.dedent(spec_text).lstrip()
+    if not text.startswith("---"):
+        return {}, text
+    match = re.match(r"---\s*\n(.*?)\n---\s*\n?", text, re.DOTALL)
+    if not match:
+        return {}, text
+    frontmatter = {}
+    for line in match.group(1).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        frontmatter[key.strip()] = value.strip()
+    remainder = text[match.end() :].lstrip()
+    return frontmatter, remainder
+
+
 def _render_spec_page(
     data_stage: str,
     product: str,
@@ -92,10 +110,13 @@ def _render_spec_page(
         spec_url = f"{repo_url}/blob/{default_branch}/{path}"
         repo_link = f"[View spec source on GitHub]({spec_url})"
 
-    command_run = f"uv run mlcast.validate_dataset {data_stage} {product} <PATH_OR_URL>"
-    command_spec = (
-        f"uv run mlcast.validate_dataset {data_stage} {product} --print-spec-markdown"
+    command_run = (
+        "uvx --with mlcast-dataset-validator mlcast.validate_dataset "
+        f"{data_stage} {product} <PATH_OR_URL>"
     )
+
+    frontmatter, body = _extract_frontmatter(spec_text)
+    spec_version = frontmatter.get("version", "unknown")
 
     parts = [
         f"# {title}",
@@ -106,21 +127,24 @@ def _render_spec_page(
 
     parts.extend(
         [
+            "Data stage:",
+            f"`{data_stage}`",
+            "",
+            "Product:",
+            f"`{product}`",
+            "",
+            "Spec version:",
+            f"`{spec_version}`",
+            "",
             "Run the validator:",
             "",
             "```bash",
             command_run,
             "```",
             "",
-            "Render this spec as Markdown:",
-            "",
-            "```bash",
-            command_spec,
-            "```",
-            "",
             "---",
             "",
-            textwrap.dedent(spec_text).strip(),
+            body.strip(),
             "",
         ]
     )
