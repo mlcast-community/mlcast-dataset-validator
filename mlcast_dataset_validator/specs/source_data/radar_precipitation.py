@@ -7,17 +7,14 @@ against this specification. The specification text is written inline with the
 calls to checking operations that match the specification requirements.
 """
 
-import textwrap
-from typing import Optional, Tuple
+from typing import Optional
 
 import xarray as xr
 from loguru import logger
 
-from ...checks.coords.future_extension import check_future_timestep
 from ...checks.coords.names import check_coordinate_names
 from ...checks.coords.spatial import check_spatial_requirements
 from ...checks.coords.temporal import check_temporal_requirements
-from ...checks.coords.variable_timestep import check_variable_timestep
 from ...checks.data_vars import naming
 from ...checks.data_vars.chunking import check_chunking_strategy
 from ...checks.data_vars.compression import check_compression
@@ -25,10 +22,11 @@ from ...checks.data_vars.data_structure import check_data_structure
 from ...checks.data_vars.georeferencing import check_georeferencing
 from ...checks.global_attributes.conditional import check_conditional_global_attributes
 from ...checks.global_attributes.licensing import check_license
+from ...checks.global_attributes.mlcast_metadata import check_mlcast_metadata
 from ...checks.global_attributes.zarr_format import check_zarr_format
 from ...checks.tool_compatibility.cartopy import check_cartopy_compatibility
 from ...checks.tool_compatibility.gdal import check_gdal_compatibility
-from ..reporting import ValidationReport
+from ..base import ValidationReport
 
 VERSION = "0.2.0"
 IDENTIFIER = __spec__.name.split(".")[-1]
@@ -39,19 +37,10 @@ IDENTIFIER = __spec__.name.split(".")[-1]
 # -------------------------
 def validate_dataset(
     path: str, storage_options: Optional[dict] = None
-) -> Tuple[ValidationReport, str]:
-    """Validate a radar precipitation dataset against the MLCast specification.
-
-    Returns the validation report alongside the rendered Markdown specification text.
-    """
+) -> ValidationReport:
+    """Validate a radar precipitation dataset against the MLCast specification."""
     report = ValidationReport()
-    spec_text = f"""
-    ---
-    data_stage: source_data
-    product: {IDENTIFIER}
-    version: {VERSION}
-    ---
-
+    spec_text = """
     ## 1. Introduction
 
     This document specifies the requirements for 2D radar precipitation and
@@ -70,10 +59,10 @@ def validate_dataset(
     (see inline comments below for rest of specification)
     """
 
+    # Load dataset
     ds = xr.open_zarr(path, storage_options=storage_options)
     logger.info(f"Opened dataset at {path}")
-    if ds is not None:
-        logger.info(str(ds))
+    logger.info(str(ds))
 
     spec_text += """
     ## 3. Coordinate Requirements
@@ -82,8 +71,8 @@ def validate_dataset(
     spec_text += """
     ### 3.1 Coordinate Variables
 
-    - "The dataset MUST expose CF-compliant coordinates: latitude/longitude and projected x/y."
-    - "Coordinate metadata MUST provide `standard_name`/`axis`/`units` per CF (with a valid `time` coordinate as well)."
+    > "The dataset MUST expose CF-compliant coordinates: latitude/longitude and projected x/y."
+    > "Coordinate metadata MUST provide `standard_name`/`axis`/`units` per CF (with a valid `time` coordinate as well)."
     """
     report += check_coordinate_names(
         ds,
@@ -93,23 +82,11 @@ def validate_dataset(
     )
 
     spec_text += """
-    ### 3.2 Future Timestep Extension
+    ### 3.2 Spatial Requirements
 
-    - "Future timesteps MUST have regular timestepping corresponding to the highest (most recent) frequency present in the data."
-    - "Future timesteps MUST NOT extend beyond the year 2050."
-    - "A global attribute named `last_valid_timestep` MUST be present to indicate the most recent non-NaN filled timestep."
-    """
-    report += check_future_timestep(
-        ds,
-        max_year=2050,
-    )
-
-    spec_text += """
-    ### 3.3 Spatial Requirements
-
-    - "The dataset MUST provide 2D radar composites with a spatial resolution of 1 kilometer or finer."
-    - "The valid sensing area MUST support at least one 256×256 pixel square crop that is fully contained within the radar sensing range."
-    - "The spatial domain, including resolution, size, and geographical coverage, MUST remain constant across all timesteps in the archive."
+    > "The dataset MUST provide 2D radar composites with a spatial resolution of 1 kilometer or finer."
+    > "The valid sensing area MUST support at least one 256×256 pixel square crop that is fully contained within the radar sensing range."
+    > "The spatial domain, including resolution, size, and geographical coverage, MUST remain constant across all times in the archive."
     """
     report += check_spatial_requirements(
         ds,
@@ -119,25 +96,15 @@ def validate_dataset(
     )
 
     spec_text += """
-    ### 3.4 Temporal Requirements
+    ### 3.3 Temporal Requirements
 
-    - "The dataset MUST contain a minimum of 3 years of continuous temporal coverage."
-    - "The timestep MAY be variable throughout the archive."
+    - "The timestep (the duration between successive time values for which a single data-point is valid) MAY be variable throughout the archive, but in that case a global attribute named `consistent_timestep_start` MUST be included to indicate the first timestamp where regular timestepping begins. In the absence of this attribute, the timestep MUST be regular throughout the archive."
+    - "Times for which data is missing MUST be given expicitly in the variable `missing_times` as CF-compliant time values. The timestep is defined as the interval between consecutive times (including missing times). These times MUST NOT be included in the main time coordinate."
+    - "Time values MUST be strictly monotonically increasing."
     """
     report += check_temporal_requirements(
         ds,
         min_years=3,
-        allow_variable_timestep=True,
-    )
-
-    spec_text += """
-    ### 3.5 Variable Timestep Handling
-
-    - "If the archive contains variable timesteps, the timesteps SHOULD follow the natural timestepping of the data collection."
-    - "A global attribute named `consistent_timestep_start` MAY be included to indicate the first timestamp where regular timestepping begins."
-    """
-    report += check_variable_timestep(
-        ds,
         allow_variable_timestep=True,
     )
 
@@ -148,7 +115,7 @@ def validate_dataset(
     spec_text += """
     ### 4.1 Chunking Strategy
 
-    - "The dataset MUST use a chunking strategy of 1 × height × width (one chunk per timestep)."
+    > "The dataset MUST use a chunking strategy of 1 × height × width (one chunk per timestep)."
     """
     report += check_chunking_strategy(
         ds,
@@ -158,9 +125,9 @@ def validate_dataset(
     spec_text += """
     ### 4.2 Compression
 
-    - "The main data arrays MUST use compression to reduce storage requirements."
-    - "ZSTD compression is RECOMMENDED for optimal performance of the main data arrays."
-    - "Coordinate arrays MAY use different compression algorithms (e.g., lz4) as appropriate."
+    > "The main data arrays MUST use compression to reduce storage requirements."
+    > "ZSTD compression is RECOMMENDED for optimal performance of the main data arrays."
+    > "Coordinate arrays MAY use different compression algorithms (e.g., lz4) as appropriate."
     """
     report += check_compression(
         ds,
@@ -172,8 +139,8 @@ def validate_dataset(
     spec_text += """
     ### 4.3 Data Structure
 
-    - "The main data variable MUST be encoded with dimensions in the order: time × height (y, lat) × width (x, lon)."
-    - "The data type MUST be floating-point (float16, float32, or float64)."
+    > "The main data variable MUST be encoded with dimensions in the order: time × height (y, lat) × width (x, lon)."
+    > "The data type MUST be floating-point (float16, float32, or float64)."
     """
     report += check_data_structure(
         ds,
@@ -184,8 +151,8 @@ def validate_dataset(
     spec_text += """
     ### 4.4 Data Variable Naming and Attributes
 
-    - "The data variable name SHOULD be a CF convention standard name or use a sensible name from the ECMWF parameter database."
-    - "The data variable MUST include the `long_name`, `standard_name` and `units` attributes following CF conventions."
+    > "The data variable name SHOULD be a CF convention standard name or use a sensible name from the ECMWF parameter database."
+    > "The data variable MUST include the `long_name`, `standard_name` and `units` attributes following CF conventions."
     """
     allowed_standard_names = (
         "rainfall_flux",
@@ -202,9 +169,9 @@ def validate_dataset(
     spec_text += """
     ### 4.5 Georeferencing
 
-    - "The dataset MUST include proper georeferencing information following the GeoZarr specification."
-    - "The data variable MUST include a `grid_mapping` attribute that references the coordinate reference system (crs) variable."
-    - "The crs variable MUST include both a `spatial_ref` and a `crs_wkt` attribute with a WKT string."
+    > "The dataset MUST include proper georeferencing information following the GeoZarr specification."
+    > "The data variable MUST include a `grid_mapping` attribute that references the coordinate reference system (crs) variable."
+    > "The crs variable MUST include both a `spatial_ref` and a `crs_wkt` attribute with a WKT string."
     """
     report += check_georeferencing(
         ds,
@@ -221,19 +188,19 @@ def validate_dataset(
     spec_text += """
     ### 5.1 Conditional Global Attributes
 
-    - "The following global attributes are CONDITIONAL: `consistent_timestep_start`, `last_valid_timestep`."
+    > "The global attribute `consistent_timestep_start` is CONDITIONALLY REQUIRED if the dataset uses a variable timestep. It MUST be an ISO formatted datetime string indicating the first timestamp where regular timestepping begins."
     """
     report += check_conditional_global_attributes(
         ds,
-        conditional_attrs=["consistent_timestep_start", "last_valid_timestep"],
+        conditional_attrs=["consistent_timestep_start"],
     )
 
     spec_text += """
     ### 5.2 Licensing Requirements
 
-    - "The dataset MUST include a global `license` attribute containing a valid SPDX identifier."
-    - "The following licenses are RECOMMENDED: `CC-BY`, `CC-BY-SA`, `OGL`."
-    - "Licenses with `NC` or `ND` restrictions SHOULD generate warnings but MAY be accepted after review."
+    > "The dataset MUST include a global `license` attribute containing a valid SPDX identifier."
+    > "The following licenses are RECOMMENDED: `CC-BY`, `CC-BY-SA`, `OGL`."
+    > "Licenses with `NC` or `ND` restrictions SHOULD generate warnings but MAY be accepted after review."
     """
     report += check_license(
         ds,
@@ -258,8 +225,8 @@ def validate_dataset(
     spec_text += """
     ### 5.3 Zarr Format
 
-    - "The dataset MUST use Zarr version 2 or version 3 format."
-    - "If Zarr version 2 is used, the dataset MUST include consolidated metadata."
+    > "The dataset MUST use Zarr version 2 or version 3 format."
+    > "If Zarr version 2 is used, the dataset MUST include consolidated metadata."
     """
     report += check_zarr_format(
         ds,
@@ -267,6 +234,19 @@ def validate_dataset(
         require_consolidated_if_v2=True,
         storage_options=storage_options,
     )
+
+    spec_text += """
+    ### 5.4 MLCast Metadata
+
+    > "The dataset MUST include the following global attributes:
+    >   - `mlcast_created_on`: ISO formatted datetime of dataset creation.
+    >   - `mlcast_created_by`: Creator contact in `Name <email>` format.
+    >   - `mlcast_created_with`: GitHub URL of the creating software including version (e.g., https://github.com/mlcast-community/mlcast-dataset-radklim@v0.1.0) and the repository/revision MUST exist.
+    >   - `mlcast_dataset_version`: Dataset specification version (semver or calver).
+    >   - `mlcast_dataset_identifier`: Unique dataset identifier formatted as `<country_code>-<entity>-<physical_variable>` by default.
+    >   - `mlcast_dataset_identifier_format`: OPTIONAL format string that MUST start with `<country_code>-<entity>-<physical_variable>` and MAY include only the approved identifier parts: `country_code`, `entity`, `physical_variable`, `time_resolution`, `common_name`."
+    """
+    report += check_mlcast_metadata(ds)
 
     spec_text += """
     ## 6. Tool Compatibility Requirements
@@ -277,17 +257,17 @@ def validate_dataset(
     spec_text += """
     ### 6.1 GDAL Compatibility
 
-    - "The dataset SHOULD expose georeferencing metadata readable by GDAL, including a CRS WKT."
-    - "A basic GeoTIFF export SHOULD roundtrip through GDAL with geotransform/projection metadata."
+    > "The dataset SHOULD expose georeferencing metadata readable by GDAL, including a CRS WKT."
+    > "A basic GeoTIFF export SHOULD roundtrip through GDAL with geotransform/projection metadata."
     """
     report += check_gdal_compatibility(ds)
 
     spec_text += """
     ### 6.2 Cartopy Compatibility
 
-    - "The CRS WKT SHOULD be parseable by cartopy."
-    - "Coordinate grids SHOULD transform cleanly into PlateCarree for mapping workflows."
+    > "The CRS WKT SHOULD be parseable by cartopy."
+    > "Coordinate grids SHOULD transform cleanly into PlateCarree for mapping workflows."
     """
     report += check_cartopy_compatibility(ds)
 
-    return report, textwrap.dedent(spec_text)
+    return report

@@ -168,6 +168,15 @@ class ValidationReport:
         """
         return any(r.status == "FAIL" for r in self.results)
 
+    def has_warnings(self) -> bool:
+        """
+        Check if the report contains any WARNING results.
+
+        Returns:
+            bool: True if there is at least one WARNING result, False otherwise.
+        """
+        return any(r.status == "WARNING" for r in self.results)
+
 
 @contextmanager
 def skip_all_checks():

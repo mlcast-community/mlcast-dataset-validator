@@ -208,3 +208,4 @@ __marimo__/
 
 uv.lock
 .python-version
+.codex-session
