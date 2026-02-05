@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import re
-import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -22,42 +21,22 @@ DOCS_DIR = REPO_ROOT / "docs"
 SPECS_DIR = DOCS_DIR / "specs"
 
 
-def _run_git(args: List[str]) -> str | None:
-    try:
-        completed = subprocess.run(
-            ["git", *args],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return completed.stdout.strip()
-
-
-def _get_repo_url() -> str | None:
-    url = _run_git(["remote", "get-url", "origin"]) or _run_git(
-        ["remote", "get-url", "upstream"]
-    )
-    if not url:
-        return None
-    if url.endswith(".git"):
-        url = url[: -len(".git")]
-    ssh_match = re.match(r"git@github.com:(.+/.+)", url)
-    if ssh_match:
-        url = f"https://github.com/{ssh_match.group(1)}"
-    return url
-
-
-def _get_default_branch() -> str:
-    head = _run_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) or ""
-    if head.startswith("origin/"):
-        return head.split("/", 1)[1]
-    return "main"
+REPO_URL = "https://github.com/mlcast-community/mlcast-dataset-validator"
+DEFAULT_BRANCH = "main"
 
 
 def _discover_catalog() -> Dict[str, List[str]]:
+    """Return available data_stage/product combinations under specs/.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Mapping of data_stage names to sorted lists of product module names.
+    """
     catalog: Dict[str, List[str]] = {}
     specs_pkg = importlib.import_module(SPEC_PACKAGE)
 
@@ -79,6 +58,18 @@ def _discover_catalog() -> Dict[str, List[str]]:
 
 
 def _extract_frontmatter(spec_text: str) -> tuple[dict, str]:
+    """Parse YAML front matter and return metadata plus remaining Markdown.
+
+    Parameters
+    ----------
+    spec_text : str
+        Raw spec Markdown text that may start with YAML front matter.
+
+    Returns
+    -------
+    tuple[dict, str]
+        Parsed key/value metadata and the remaining Markdown body.
+    """
     text = textwrap.dedent(spec_text).lstrip()
     if not text.startswith("---"):
         return {}, text
@@ -103,6 +94,26 @@ def _render_spec_page(
     repo_url: str | None,
     default_branch: str,
 ) -> str:
+    """Render a full Markdown page for a single spec.
+
+    Parameters
+    ----------
+    data_stage : str
+        Data stage name (e.g., ``source_data``).
+    product : str
+        Product identifier (e.g., ``radar_precipitation``).
+    spec_text : str
+        Raw spec Markdown text.
+    repo_url : str | None
+        Base repository URL used to link to spec sources.
+    default_branch : str
+        Default branch name used in source links.
+
+    Returns
+    -------
+    str
+        Rendered Markdown page content.
+    """
     title = f"{data_stage}/{product} specification"
     repo_link = ""
     if repo_url:
@@ -116,26 +127,34 @@ def _render_spec_page(
     )
 
     frontmatter, body = _extract_frontmatter(spec_text)
-    spec_version = frontmatter.get("version", "unknown")
 
     parts = [
         f"# {title}",
         "",
     ]
+
+    frontmatter_block = None
+    if frontmatter:
+        yaml_lines = []
+        for key in sorted(frontmatter):
+            yaml_lines.append(f"{key}: {frontmatter[key]}")
+        frontmatter_block = "\n".join(yaml_lines)
+
+    if frontmatter_block:
+        parts.extend(
+            [
+                "```yaml",
+                frontmatter_block,
+                "```",
+                "",
+            ]
+        )
+
     if repo_link:
         parts.extend([repo_link, ""])
 
     parts.extend(
         [
-            "Data stage:",
-            f"`{data_stage}`",
-            "",
-            "Product:",
-            f"`{product}`",
-            "",
-            "Spec version:",
-            f"`{spec_version}`",
-            "",
             "Run the validator:",
             "",
             "```bash",
@@ -152,6 +171,17 @@ def _render_spec_page(
 
 
 def _write_index(catalog: Dict[str, List[str]]) -> None:
+    """Write docs/index.md with links to each generated spec page.
+
+    Parameters
+    ----------
+    catalog : dict[str, list[str]]
+        Mapping of data_stage names to product module names.
+
+    Returns
+    -------
+    None
+    """
     lines = [
         "# MLCast dataset specifications",
         "",
@@ -171,9 +201,20 @@ def _write_index(catalog: Dict[str, List[str]]) -> None:
 
 
 def main() -> int:
+    """Generate spec pages and the index page for MkDocs.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    int
+        Exit status code, zero on success.
+    """
     catalog = _discover_catalog()
-    repo_url = _get_repo_url()
-    default_branch = _get_default_branch()
+    repo_url = REPO_URL
+    default_branch = DEFAULT_BRANCH
 
     SPECS_DIR.mkdir(parents=True, exist_ok=True)
 
