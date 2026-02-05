@@ -7,8 +7,6 @@ against this specification. The specification text is written inline with the
 calls to checking operations that match the specification requirements.
 """
 
-from typing import Optional
-
 import xarray as xr
 from loguru import logger
 
@@ -35,9 +33,7 @@ IDENTIFIER = __spec__.name.split(".")[-1]
 # -------------------------
 # Core public API
 # -------------------------
-def validate_dataset(
-    path: str, storage_options: Optional[dict] = None
-) -> ValidationReport:
+def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     """Validate a radar precipitation dataset against the MLCast specification."""
     report = ValidationReport()
     spec_text = """
@@ -59,9 +55,7 @@ def validate_dataset(
     (see inline comments below for rest of specification)
     """
 
-    # Load dataset
-    ds = xr.open_zarr(path, storage_options=storage_options)
-    logger.info(f"Opened dataset at {path}")
+    logger.info("Validating provided dataset.")
     logger.info(str(ds))
 
     spec_text += """
@@ -232,7 +226,6 @@ def validate_dataset(
         ds,
         allowed_versions=[2, 3],
         require_consolidated_if_v2=True,
-        storage_options=storage_options,
     )
 
     spec_text += """

@@ -8,6 +8,7 @@ import pkgutil
 import sys
 from typing import Dict, List, Sequence
 
+import xarray as xr
 from loguru import logger
 
 from .. import __version__
@@ -164,9 +165,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{__version__})"
     )
 
-    report = module.validate_dataset(
-        args.dataset_path, storage_options=storage_options or None
-    )
+    ds = xr.open_zarr(args.dataset_path, storage_options=storage_options or None)
+    if storage_options:
+        ds.encoding.setdefault("storage_options", storage_options)
+
+    report = module.validate_dataset(ds)
     report.console_print()
 
     return 1 if report.has_fails() else 0

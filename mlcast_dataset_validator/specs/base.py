@@ -89,14 +89,17 @@ class ValidationReport:
         out.results = [*self.results, *other.results]
         return out
 
-    def console_print(self) -> None:
+    def console_print(self, *, file=None) -> None:
         """
         Print all results in the validation report as a table using the rich library.
+
+        Args:
+            file: Optional file-like object to write to (defaults to stdout).
 
         Returns:
             None
         """
-        console = Console()
+        console = Console(file=file)
         table = Table(title="Validation Report")
 
         table.add_column("Section", style="bold")
