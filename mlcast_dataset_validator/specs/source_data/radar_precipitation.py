@@ -7,6 +7,7 @@ against this specification. The specification text is written inline with the
 calls to checking operations that match the specification requirements.
 """
 
+import textwrap
 from typing import Optional
 
 import xarray as xr
@@ -26,7 +27,7 @@ from ...checks.global_attributes.mlcast_metadata import check_mlcast_metadata
 from ...checks.global_attributes.zarr_format import check_zarr_format
 from ...checks.tool_compatibility.cartopy import check_cartopy_compatibility
 from ...checks.tool_compatibility.gdal import check_gdal_compatibility
-from ..base import ValidationReport
+from ..reporting import ValidationReport
 
 VERSION = "0.2.0"
 IDENTIFIER = __spec__.name.split(".")[-1]
@@ -40,7 +41,13 @@ def validate_dataset(
 ) -> ValidationReport:
     """Validate a radar precipitation dataset against the MLCast specification."""
     report = ValidationReport()
-    spec_text = """
+    spec_text = f"""
+    ---
+    data_stage: source_data
+    product: {IDENTIFIER}
+    version: {VERSION}
+    ---
+
     ## 1. Introduction
 
     This document specifies the requirements for 2D radar precipitation and
@@ -270,4 +277,4 @@ def validate_dataset(
     """
     report += check_cartopy_compatibility(ds)
 
-    return report
+    return report, textwrap.dedent(spec_text)
