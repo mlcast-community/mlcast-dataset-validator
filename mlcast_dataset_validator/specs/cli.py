@@ -8,6 +8,7 @@ import pkgutil
 import sys
 from typing import Dict, List, Sequence
 
+import xarray as xr
 from loguru import logger
 
 from .. import __version__
@@ -180,20 +181,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.print_spec_markdown:
         with skip_all_checks():
-            _, spec_text = module.validate_dataset(
-                args.dataset_path or "",
-                storage_options=storage_options or None,
-            )
+            _, spec_text = module.validate_dataset(None)
         if not spec_text:
             raise SystemExit(
                 "Specification text could not be retrieved from validate_dataset()."
             )
         print(spec_text)
         return 0
+    else:
+        ds = xr.open_zarr(args.dataset_path, storage_options=storage_options or None)
+        if storage_options:
+            ds.encoding.setdefault("storage_options", storage_options)
+        logger.info(
+            f"Opened dataset at {args.dataset_path}"
+            + (f" with storage options {storage_options}" if storage_options else "")
+        )
 
-    report, _ = module.validate_dataset(
-        args.dataset_path, storage_options=storage_options or None
-    )
+    report, _ = module.validate_dataset(ds=ds)
     report.console_print()
 
     return 1 if report.has_fails() else 0

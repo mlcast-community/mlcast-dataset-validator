@@ -52,6 +52,9 @@ def check_zarr_format(
     """Check Zarr format requirements."""
     report = ValidationReport()
 
+    if storage_options is None:
+        storage_options = ds.encoding.get("storage_options")
+
     zarr_format = getattr(ds, "zarr_format", 2)  # Default to Zarr v2
     if zarr_format in allowed_versions:
         report.add(
