@@ -211,3 +211,4 @@ uv.lock
 .codex-session
 
 docs/specs/
+.DS_Store

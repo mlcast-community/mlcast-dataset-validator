@@ -14,7 +14,13 @@ markdown_extensions:
   - def_list
   - footnotes
   - tables
+  - pymdownx.highlight
+  - pymdownx.superfences
   - toc:
       permalink: true
 nav:
   - Home: index.md
+  # -- specs-nav-begin --
+  - Source data:
+      - Radar precipitation: specs/source_data/radar_precipitation.md
+# -- specs-nav-end --

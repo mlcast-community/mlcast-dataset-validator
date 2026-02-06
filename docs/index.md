@@ -6,4 +6,5 @@ and product, and provides the exact validation requirements used by the CLI.
 
 Available specifications:
 
-- [source_data/radar_precipitation](specs/source_data/radar_precipitation.md)
+- Source data
+    - [Radar precipitation](specs/source_data/radar_precipitation.md)
