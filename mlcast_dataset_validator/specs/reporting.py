@@ -1,10 +1,42 @@
 from __future__ import annotations
 
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from typing import List, Optional
+from functools import wraps
+from typing import Callable, Dict, List, Optional, Tuple
+from unittest import mock
 
+from loguru import logger
 from rich.console import Console
 from rich.table import Table
+
+# -------------------------
+# Logging decorator and registry
+# -------------------------
+CHECK_REGISTRY: Dict[Tuple[str, str], Callable] = {}
+
+
+def log_function_call(func):
+    """Decorator to log function calls with their arguments.
+
+    The original callable is stored in ``CHECK_REGISTRY`` so that it can be
+    monkey patched (e.g., when printing specs without running validations).
+    """
+
+    if (func.__module__, func.__name__) not in CHECK_REGISTRY:
+        CHECK_REGISTRY[(func.__module__, func.__name__)] = func
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        logger.info(f"Applying {func.__name__} with {kwargs}")
+        func_from_registry = CHECK_REGISTRY[(func.__module__, func.__name__)]
+        report = func_from_registry(*args, **kwargs)
+        for result in report.results:
+            result.module = func.__module__
+            result.function = func.__name__
+        return report
+
+    return wrapper
 
 
 # -------------------------
@@ -147,3 +179,38 @@ class ValidationReport:
             bool: True if there is at least one WARNING result, False otherwise.
         """
         return any(r.status == "WARNING" for r in self.results)
+
+
+@contextmanager
+def skip_all_checks():
+    """Context manager to bypass check functions and dataset loading.
+
+    Assumes check functions are decorated with ``log_function_call`` which
+    records them in ``CHECK_REGISTRY``. Each registered check is monkey patched
+    to a stub returning an empty ``ValidationReport`` and dataset loading is
+    bypassed.
+    """
+
+    def _stubbed_check(*_args, **_kwargs):
+        return ValidationReport()
+
+    with ExitStack() as stack:
+        # Avoid calling into real xarray when rendering specs.
+        try:
+            stack.enter_context(mock.patch("xarray.open_zarr", lambda *a, **kw: None))
+            import xarray as xr
+
+            stack.enter_context(
+                mock.patch.object(xr, "open_zarr", lambda *a, **kw: None)
+            )
+        except ModuleNotFoundError:
+            # xarray not available in this environment; skip patching dataset load.
+            pass
+
+        stack.enter_context(
+            mock.patch.dict(
+                CHECK_REGISTRY,
+                {key: _stubbed_check for key in list(CHECK_REGISTRY.keys())},
+            )
+        )
+        yield

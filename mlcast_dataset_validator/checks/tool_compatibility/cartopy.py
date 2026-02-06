@@ -10,8 +10,7 @@ from typing import Optional
 import numpy as np
 import xarray as xr
 
-from ...specs.base import ValidationReport
-from ...utils.logging_decorator import log_function_call
+from ...specs.reporting import ValidationReport, log_function_call
 from ..data_vars_filter import select_data_var
 from . import SECTION_ID as PARENT_SECTION_ID
 

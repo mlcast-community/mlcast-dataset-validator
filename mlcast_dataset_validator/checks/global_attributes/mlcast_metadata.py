@@ -12,7 +12,7 @@ from packaging.version import parse as parse_version
 from parse import compile as parse_compile
 from requests import RequestException
 
-from ...specs.base import ValidationReport
+from ...specs.reporting import ValidationReport
 from ...utils.logging_decorator import log_function_call
 from . import SECTION_ID as PARENT_SECTION_ID
 

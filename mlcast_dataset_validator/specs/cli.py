@@ -12,6 +12,7 @@ import xarray as xr
 from loguru import logger
 
 from .. import __version__
+from .reporting import skip_all_checks
 
 SPEC_PACKAGE = "mlcast_dataset_validator.specs"
 
@@ -97,6 +98,14 @@ def build_parser(catalog: Dict[str, List[str]]) -> argparse.ArgumentParser:
         action="store_true",
         help="List available data_stage/product combinations and exit.",
     )
+    parser.add_argument(
+        "--print-spec-markdown",
+        action="store_true",
+        help=(
+            "Print the selected specification as Markdown without running validation checks. "
+            "Requires data_stage and product, dataset_path is optional."
+        ),
+    )
     parser.epilog = "Available combinations:\n" + _format_catalog(catalog)
     return parser
 
@@ -135,7 +144,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  - {product}")
         return 0
 
-    if not (args.data_stage and args.product and args.dataset_path):
+    if args.print_spec_markdown:
+        if not (args.data_stage and args.product):
+            parser.error(
+                "--print-spec-markdown requires a data_stage and product to select the specification."
+            )
+    elif not (args.data_stage and args.product and args.dataset_path):
         parser.print_help()
         return 1
 
@@ -165,11 +179,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{__version__})"
     )
 
-    ds = xr.open_zarr(args.dataset_path, storage_options=storage_options or None)
-    if storage_options:
-        ds.encoding.setdefault("storage_options", storage_options)
+    if args.print_spec_markdown:
+        with skip_all_checks():
+            _, spec_text = module.validate_dataset(None)
+        if not spec_text:
+            raise SystemExit(
+                "Specification text could not be retrieved from validate_dataset()."
+            )
+        print(spec_text)
+        return 0
+    else:
+        ds = xr.open_zarr(args.dataset_path, storage_options=storage_options or None)
+        if storage_options:
+            ds.encoding.setdefault("storage_options", storage_options)
 
-    report = module.validate_dataset(ds)
+    report, _ = module.validate_dataset(ds=ds)
     report.console_print()
 
     return 1 if report.has_fails() else 0
