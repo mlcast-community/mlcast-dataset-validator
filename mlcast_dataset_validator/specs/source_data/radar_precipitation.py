@@ -63,7 +63,6 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     (see inline comments below for rest of specification)
     """
 
-    logger.info("Validating provided dataset.")
     logger.info(str(ds))
 
     spec_text += """

@@ -192,6 +192,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         ds = xr.open_zarr(args.dataset_path, storage_options=storage_options or None)
         if storage_options:
             ds.encoding.setdefault("storage_options", storage_options)
+        logger.info(
+            f"Opened dataset at {args.dataset_path}"
+            + (f" with storage options {storage_options}" if storage_options else "")
+        )
 
     report, _ = module.validate_dataset(ds=ds)
     report.console_print()
