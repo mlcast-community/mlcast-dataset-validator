@@ -5,8 +5,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from ...specs.base import ValidationReport
-from ...utils.logging_decorator import log_function_call
+from ...specs.reporting import ValidationReport, log_function_call
 from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.3"

@@ -1,7 +1,6 @@
 import xarray as xr
 
-from ...specs.base import ValidationReport
-from ...utils.logging_decorator import log_function_call
+from ...specs.reporting import ValidationReport, log_function_call
 from ..data_vars_filter import iter_data_vars
 from . import SECTION_ID as PARENT_SECTION_ID
 
