@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Add `--print-spec-markdown` to skip validation/dataset loading, stub all checks, print the selected spec as Markdown, and include YAML front matter (`data_stage`, `product`, `version`) for metadata consumers. [\#17](https://github.com/mlcast-community/mlcast-dataset-validator/pull/17), leifdenby
+- Add CI rendering of specs to HTML and deploy to GitHub Pages for linkable, readable spec docs. [\#22](https://github.com/mlcast-community/mlcast-dataset-validator/pull/22), leifdenby
 
 ## [v0.1.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.1.0)
 
