@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.2.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.2.0)
+
+This release makes the validator easier to use from python and the specs defined in the validator easier to access. This done by allowing for direct calls to validation functions with `xr.Dataset` input. And introducing a cli arg to print selected spec to terminal and adding CI rendering of specs to HTML that are deployted to GitHub Pages for linkable, readable spec docs.
 
 ### Added
 
