@@ -1,5 +1,7 @@
 # mlcast-dataset-validator
 
+[![Spec Docs](https://img.shields.io/badge/spec%20docs-HTML-blue)](https://mlcast-community.github.io/mlcast-dataset-validator/)
+
 Dataset validator for the MLCast Intake catalog ([mlcast-datasets](https://github.com/mlcast-community/mlcast-datasets)).
 
 ## What is this?
