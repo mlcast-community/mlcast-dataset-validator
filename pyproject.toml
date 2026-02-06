@@ -27,6 +27,12 @@ dependencies = [
 "mlcast.validate_dataset" = "mlcast_dataset_validator.specs.cli:main"
 
 [dependency-groups]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.7",
+    "pygments>=2.19.2",
+    "pymdown-extensions>=10.20.1",
+]
 dev = [
     "ipdb>=0.13.13",
     "pre-commit>=4.3.0",
