@@ -1,4 +1,5 @@
 import xarray as xr
+import math
 
 from ...specs.reporting import ValidationReport, log_function_call
 from . import SECTION_ID as PARENT_SECTION_ID
@@ -35,9 +36,10 @@ def check_spatial_requirements(
             if len(x_vals) > 1 and len(y_vals) > 1:
                 x_res = abs(float(x_vals[1] - x_vals[0]))
                 y_res = abs(float(y_vals[1] - y_vals[0]))
+                max_resolution_m = max_resolution_km * 1000
                 if (
-                    x_res <= max_resolution_km * 1000
-                    and y_res <= max_resolution_km * 1000
+                    (x_res <= max_resolution_m or math.isclose(x_res, max_resolution_m, rel_tol=1e-6))
+                    and (y_res <= max_resolution_m or math.isclose(y_res, max_resolution_m, rel_tol=1e-6))
                 ):
                     report.add(
                         SECTION_ID,
