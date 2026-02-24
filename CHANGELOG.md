@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Detect Zarr v3 format from store files (`zarr.json`) instead of relying on `getattr(ds, "zarr_format", 2)` which always defaulted to v2, causing v3 stores to incorrectly fail the consolidated metadata check [\#27](https://github.com/mlcast-community/mlcast-dataset-validator/pull/27), @franchg
+- Fix for package version in ci build of html render of specs [\#25](https://github.com/mlcast-community/mlcast-dataset-validator/pull/25), @leifdenby
 
 ## [v0.2.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.2.0)
 
