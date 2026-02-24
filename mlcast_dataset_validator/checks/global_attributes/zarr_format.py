@@ -41,6 +41,30 @@ def has_consolidated_metadata(ds, storage_options=None):
     return fs.exists(f"{store_root}/.zmetadata")
 
 
+def _detect_zarr_format(ds, storage_options=None):
+    """Detect Zarr format version from the store on disk.
+
+    Zarr v3 stores have a ``zarr.json`` file at the root, while v2 stores
+    have ``.zgroup``.  xarray does not expose the format version as a
+    dataset attribute, so we inspect the store directly.
+    """
+    store_path = ds.encoding.get("source")
+    if store_path is None:
+        return 2  # cannot determine, assume v2
+
+    if storage_options is None:
+        storage_options = ds.encoding.get("storage_options")
+
+    fs, _, paths = fsspec.get_fs_token_paths(
+        store_path, storage_options=storage_options
+    )
+    store_root = paths[0].rstrip("/")
+
+    if fs.exists(f"{store_root}/zarr.json"):
+        return 3
+    return 2
+
+
 @log_function_call
 def check_zarr_format(
     ds: xr.Dataset,
@@ -55,7 +79,7 @@ def check_zarr_format(
     if storage_options is None:
         storage_options = ds.encoding.get("storage_options")
 
-    zarr_format = getattr(ds, "zarr_format", 2)  # Default to Zarr v2
+    zarr_format = _detect_zarr_format(ds, storage_options)
     if zarr_format in allowed_versions:
         report.add(
             SECTION_ID,
