@@ -2,6 +2,7 @@ from typing import Sequence
 
 import fsspec
 import xarray as xr
+from botocore.exceptions import NoCredentialsError
 
 from ...specs.reporting import ValidationReport, log_function_call
 from . import SECTION_ID as PARENT_SECTION_ID
@@ -162,7 +163,10 @@ def check_zarr_format(
                     "FAIL",
                     "Zarr v2 dataset is missing consolidated metadata",
                 )
-    except FileNotFoundError as exc:
+    # not providing anon=True in storage_options for an S3 store without
+    # credentials will raise a NoCredentialsError, while a local store that
+    # doesn't exist will raise a FileNotFoundError
+    except (FileNotFoundError, NoCredentialsError) as exc:
         if _is_remote_store(store_path):
             report.add(
                 SECTION_ID,
