@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/mlcast-community/mlcast-dataset-validator)
+## [v0.3.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.3.0)
 
 ### Fixed
 
@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detect Zarr v3 format from store files (`zarr.json`) instead of relying on `getattr(ds, "zarr_format", 2)` which always defaulted to v2, causing v3 stores to incorrectly fail the consolidated metadata check [\#27](https://github.com/mlcast-community/mlcast-dataset-validator/pull/27), @franchg
 - Fix for package version in ci build of html render of specs [\#25](https://github.com/mlcast-community/mlcast-dataset-validator/pull/25), @leifdenby
 - Ensure zarr format checks fail if requirements cannot be validated due to missing access to underlying zarr store [\#31](https://github.com/mlcast-community/mlcast-dataset-validator/pull/31), @leifdenby
+
+### Maintenance
+
+- Add info on installing `mlcast-dataset-validator` from PyPI and running from command-line with `uvx` in README [\#32](https://github.com/mlcast-community/mlcast-dataset-validator/pull/32), @leifdenby
 
 ## [v0.2.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.2.0)
 
