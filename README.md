@@ -76,23 +76,29 @@ mlcast_dataset_validator/
 ```
 
 
-## Example usage
+## Usage
 
-Until `mllam-dataset-validator` is published to PyPI, the easiest way to run it is to use [uv](https://docs.astral.sh/uv/getting-started/installation/) to run it directly from the GitHub repository:
+The validator can be run from the command-line or imported and called directly from Python as you will see below.
+
+### From the command-line
+
+The easiest way to run the validator is to use
+[uv](https://docs.astral.sh/uv/getting-started/installation/) and execute it
+directly from the PyPI release (`mlcast-dataset-validator`):
 
 ```bash
-uvx --with "git+https://github.com/mlcast-community/mlcast-dataset-validator" mlcast.validate_dataset <data_stage> <product> <dataset-path>
+uvx --from mlcast-dataset-validator mlcast.validate_dataset <data_stage> <product> <dataset-path>
 ```
 
 I.e. you can validate a local Zarr dataset like this:
 ```bash
-uvx --with "git+https://github.com/mlcast-community/mlcast-dataset-validator" mlcast.validate_dataset source_data radar_precipitation /path/to/radar_precip_source.zarr
+uvx --from mlcast-dataset-validator mlcast.validate_dataset source_data radar_precipitation /path/to/radar_precip_source.zarr
 ```
 
 The validator supports also remote zarr hosted in S3 buckets at custom endpoints. We can run it on the Radklim Zarr already available in the intake catalog:
 
 ```bash
-uvx --with "git+https://github.com/mlcast-community/mlcast-dataset-validator" mlcast.validate_dataset source_data radar_precipitation s3://mlcast-source-datasets/radklim/v0.1.0/5_minutes.zarr/ --s3-endpoint-url https://object-store.os-api.cci2.ecmwf.int --s3-anon
+uvx --from mlcast-dataset-validator mlcast.validate_dataset source_data radar_precipitation s3://mlcast-source-datasets/radklim/v0.1.1/5_minutes.zarr/ --s3-endpoint-url https://object-store.os-api.cci2.ecmwf.int --s3-anon
 ```
 
 Or you can of course clone the repository and run it directly:
@@ -102,4 +108,31 @@ git clone
 cd mlcast-sourcedata-validator
 pip install -e .
 mlcast.validate_dataset source_data radar_precipitation /path/to/zarr/file.zarr
+```
+
+### From python
+
+You can also integrate the validator into your Python workflow by importing the relevant spec and calling it directly with an `xr.Dataset` object. This is how the validator is used in the CI of the [mlcast-datasets repository](https://github.com/mlcast-community/mlcast-datasets) to validate datasets on every PR and main branch commit.
+
+For example to validate the same Radklim Zarr dataset from Python, you can do:
+
+```python
+import xarray as xr
+
+from mlcast_dataset_validator.specs.source_data import radar_precipitation
+
+storage_options = {
+    "endpoint_url": "https://object-store.os-api.cci2.ecmwf.int",
+    "anon": True,
+}
+
+ds = xr.open_zarr(
+    "s3://mlcast-source-datasets/radklim/v0.1.1/5_minutes.zarr/",
+    storage_options=storage_options,
+)
+# Preserve storage options on the dataset so zarr_format checks can inspect remote-store metadata correctly.
+ds.encoding.setdefault("storage_options", storage_options)
+
+report, _ = radar_precipitation.validate_dataset(ds)
+report.console_print()
 ```
