@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Maintenance
 
-- Add info on installing `mlcast-dataset-validator` fro PyPI and running from command-line with `uvx` in README [\#32](https://github.com/mlcast-community/mlcast-dataset-validator/pull/32), @leifdenby
+- Add info on installing `mlcast-dataset-validator` from PyPI and running from command-line with `uvx` in README [\#32](https://github.com/mlcast-community/mlcast-dataset-validator/pull/32), @leifdenby
 
 ## [v0.2.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.2.0)
 
