@@ -47,18 +47,20 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
 
     ## 1. Introduction
 
-    This document specifies the requirements for 2D radar precipitation and
-    reflectivity composite datasets to be included in the MLCast data collection.
+    This document specifies the requirements for 2D gridded radar precipitation
+    and reflectivity datasets to be included in the MLCast data collection.
     The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD",
     "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be
     interpreted as described in RFC 2119.
 
     ## 2. Scope
 
-    This specification applies to 2D radar composite datasets (merged from multiple
-    radar sources) intended for machine learning applications in weather and
-    climate research. Single-radar datasets are explicitly excluded from this
-    specification.
+    This specification applies to 2D gridded radar datasets intended for machine
+    learning applications in weather and climate research. Both multi-radar
+    composites (merged from multiple radar sources) and single-radar products are
+    in scope, provided they satisfy the spatial requirements in §3.2 — in
+    particular, that the valid sensing area supports at least one 256×256 pixel
+    crop at a resolution of 1 km or finer.
 
     (see inline comments below for rest of specification)
     """
@@ -85,8 +87,8 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     spec_text += """
     ### 3.2 Spatial Requirements
 
-    - The dataset MUST provide 2D radar composites with a spatial resolution of 1 kilometer or finer.
-    - The valid sensing area MUST support at least one 256×256 pixel square crop that is fully contained within the radar sensing range.
+    - The dataset MUST provide 2D gridded radar data with a spatial resolution of 1 kilometer or finer.
+    - The valid sensing area MUST support at least one 256×256 pixel square crop that is fully contained within the radar sensing range. This applies equally to multi-radar composites and to single-radar products.
     - The spatial domain, including resolution, size, and geographical coverage, MUST remain constant across all times in the archive.
     """
     report += check_spatial_requirements(
