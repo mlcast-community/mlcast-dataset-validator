@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased](https://github.com/mlcast-community/mlcast-dataset-validator)
+
+### Changed
+
+- Expand the scope of the radar precipitation spec to include single-radar products (previously restricted to multi-radar composites). Single-radar datasets are now in scope provided the valid sensing area supports at least one 256×256 crop at ≤1 km resolution (§3.2), @franchg
+
 ## [v0.3.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.3.0)
 
 ### Fixed
