@@ -21,7 +21,7 @@ This tool addresses two key needs identified in the community:
 The validator checks both **specification compliance** and **practical tool compatibility**, for example for [radar precipitation datasets it checks](mlcast_dataset_validator/specs/source_data/radar_precipitation.py):
 
 - **Minimum Requirements for Dataset Acceptance:**
-    - 2D radar composite at 1km resolution or finer
+    - 2D radar composite at 1.01km resolution or finer
     - At least 256×256 pixel valid sensing area
     - Minimum 3 years of temporal coverage
     - Consistent spatial domain across all timesteps
