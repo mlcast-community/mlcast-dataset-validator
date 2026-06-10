@@ -215,11 +215,11 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
             "CC-BY-2.5",
             "CC-BY-3.0",
             "CC-BY-4.0",
-            "OGL-UK-",
+            "OGL-UK-1.0",
             "OGL-UK-2.0",
             "OGL-UK-3.0",
             "OGL-Canada-2.0",
-            "GPL-",
+            "GPL-1.0",
             "GPL",
         ],
         warn_on_restricted=["NC", "ND"],
@@ -244,7 +244,7 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
 
     - `mlcast_created_on`: ISO formatted datetime of dataset creation.
     - `mlcast_created_by`: Creator contact in `Name <email>` format.
-    - `mlcast_created_with`: GitHub URL of the creating software including version (e.g., https://github.com/mlcast-community/mlcast-dataset-radklim@v0.) and the repository/revision MUST exist.
+    - `mlcast_created_with`: GitHub URL of the creating software including version (e.g., https://github.com/mlcast-community/mlcast-dataset-radklim@v0.1.0) and the repository/revision MUST exist.
     - `mlcast_dataset_version`: Dataset specification version (semver or calver).
     - `mlcast_dataset_identifier`: Unique dataset identifier formatted as `<country_code>-<entity>-<physical_variable>` by default.
     - `mlcast_dataset_identifier_format`: OPTIONAL format string that MUST start with `<country_code>-<entity>-<physical_variable>` and MAY include only the approved identifier parts: `country_code`, `entity`, `physical_variable`, `time_resolution`, `common_name`.
