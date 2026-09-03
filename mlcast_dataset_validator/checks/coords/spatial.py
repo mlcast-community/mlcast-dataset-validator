@@ -12,6 +12,7 @@ SECTION_ID = f"{PARENT_SECTION_ID}.2"
 def check_spatial_requirements(
     ds: xr.Dataset,
     max_resolution_km: float,
+    rel_tol: float,
     min_crop_size: tuple[int, int],
     require_constant_domain: bool,
 ) -> ValidationReport:
@@ -21,6 +22,7 @@ def check_spatial_requirements(
     Parameters:
         ds (xr.Dataset): The dataset to validate.
         max_resolution_km (float): Maximum allowed spatial resolution in kilometers.
+        rel_tol (float): Maximum allowed relative tolerance for the spatial resolution.
         min_crop_size (tuple[int, int]): Minimum crop size as (height, width) in pixels.
         require_constant_domain (bool): Whether the spatial domain must remain constant across timesteps.
 
@@ -40,10 +42,10 @@ def check_spatial_requirements(
                 max_resolution_m = max_resolution_km * 1000
                 if (
                     x_res <= max_resolution_m
-                    or math.isclose(x_res, max_resolution_m, rel_tol=1e-6)
+                    or math.isclose(x_res, max_resolution_m, rel_tol=rel_tol)
                 ) and (
                     y_res <= max_resolution_m
-                    or math.isclose(y_res, max_resolution_m, rel_tol=1e-6)
+                    or math.isclose(y_res, max_resolution_m, rel_tol=rel_tol)
                 ):
                     report.add(
                         SECTION_ID,

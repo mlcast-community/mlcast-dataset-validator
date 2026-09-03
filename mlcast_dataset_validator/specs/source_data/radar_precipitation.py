@@ -60,7 +60,7 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     composites (merged from multiple radar sources) and single-radar products are
     in scope, provided they satisfy the spatial requirements in §3.2 — in
     particular, that the valid sensing area supports at least one 256×256 pixel
-    crop at a resolution of 1 km or finer.
+    crop at a resolution of 1.0 km (with 1% tolerance) or finer.
 
     (see inline comments below for rest of specification)
     """
@@ -87,13 +87,14 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     spec_text += """
     ### 3.2 Spatial Requirements
 
-    - The dataset MUST provide 2D gridded radar data with a spatial resolution of 1 kilometer or finer.
+    - The dataset MUST provide 2D gridded radar data with a spatial resolution of 1 kilometer (with 1% tolerance) or finer.
     - The valid sensing area MUST support at least one 256×256 pixel square crop that is fully contained within the radar sensing range. This applies equally to multi-radar composites and to single-radar products.
     - The spatial domain, including resolution, size, and geographical coverage, MUST remain constant across all times in the archive.
     """
     report += check_spatial_requirements(
         ds,
         max_resolution_km=1.0,
+        rel_tol=1e-2,
         min_crop_size=(256, 256),
         require_constant_domain=True,
     )
