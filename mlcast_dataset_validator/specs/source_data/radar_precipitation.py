@@ -130,6 +130,7 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     report += check_chunking_strategy(
         ds,
         time_chunksize=1,
+        require_full_spatial_chunks=True,
     )
 
     spec_text += """

@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expand the scope of the radar precipitation spec to include single-radar products (previously restricted to multi-radar composites). Single-radar datasets are now in scope provided the valid sensing area supports at least one 256×256 crop at ≤1 km resolution (§3.2), @franchg
 - Include an explicit rel_tolerance as a parameter to check_spatial_requirements function and set it to 1% in radar_precipitation.py. This allows a small tolerance for datasets that are marginally above the strict 1.0km threshold, while maintaining the original resolution constraint intent. @jaimecasari
 
+### Fixed
+
+- The chunking check now also requires each chunk to cover the full spatial domain, as §4.1 already specified (1 × height × width). Previously only the time chunk size was checked [\#44](https://github.com/mlcast-community/mlcast-dataset-validator/pull/44), @franchg
+
 ### Maintenance
 
 - Add CI check that fails pull requests which don't update `CHANGELOG.md`; PRs that don't need an entry can opt out with the `no changelog` label [\#42](https://github.com/mlcast-community/mlcast-dataset-validator/pull/42), @leifdenby
