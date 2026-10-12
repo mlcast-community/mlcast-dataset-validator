@@ -3,6 +3,7 @@ from typing import Dict, Sequence
 import xarray as xr
 
 from ...specs.reporting import ValidationReport, log_function_call
+from ..data_vars_filter import iter_data_vars
 from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.4"
@@ -57,5 +58,56 @@ def check_variable_units(
                 f"Variable '{data_var}' with units '{units}' is invalid. "
                 f"Expected one of: {valid_specs}.",
             )
+
+    return report
+
+
+@log_function_call
+def check_variable_attributes(
+    ds: xr.Dataset,
+    *,
+    required: Sequence[str] = ("units",),
+    recommended: Sequence[str] = ("long_name",),
+) -> ValidationReport:
+    """
+    Check that every data variable carries the required (FAIL if missing) and
+    recommended (WARNING if missing) attributes.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset to validate.
+    required : Sequence[str], optional
+        Attributes every data variable MUST carry.
+    recommended : Sequence[str], optional
+        Attributes every data variable SHOULD carry.
+
+    Returns
+    -------
+    ValidationReport
+        Report with one result per data variable and attribute.
+    """
+    report = ValidationReport()
+
+    for name, data_array in iter_data_vars(ds):
+        for attr, missing_status in [
+            *((attr, "FAIL") for attr in required),
+            *((attr, "WARNING") for attr in recommended),
+        ]:
+            requirement = f"Attribute '{attr}' on '{name}'"
+            if attr in data_array.attrs:
+                report.add(
+                    SECTION_ID,
+                    requirement,
+                    "PASS",
+                    f"'{attr}' = '{data_array.attrs[attr]}'",
+                )
+            else:
+                report.add(
+                    SECTION_ID,
+                    requirement,
+                    missing_status,
+                    f"Attribute '{attr}' is missing",
+                )
 
     return report

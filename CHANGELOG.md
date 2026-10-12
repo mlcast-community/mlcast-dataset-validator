@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- New `verification/forecast_scoring_metrics` specification (version 0.1.0) for forecast scoring metrics datasets, i.e. scores of forecasts stored per forecast case. It uses the WeatherBench-X `{metric}.{variable}` naming, has `forecast_source`, `init_time` and `lead_time` dimensions, and requires a declared `metric_polarity` for metrics whose polarity is not known. A conforming dataset can be used directly as input to [mlwp-scorecard](https://github.com/mlwp-tools/mlwp-scorecard). The spec is validated with new generic checks in `checks/coords/dimensions.py`, `checks/coords/temporal.py`, `checks/data_vars/{naming,metric_polarity,data_structure,data_variable}.py` and `checks/global_attributes/recommended.py`. `tests/scripts/make_verification_scores_example.py` writes a conforming example dataset to try it out with [\#47](https://github.com/mlcast-community/mlcast-dataset-validator/pull/47), @leifdenby
+- The CLI now opens netCDF files (`.nc`, `.nc4`, `.cdf`), and `check_zarr_format` takes `allow_netcdf` to accept them. `netcdf4` is now a core dependency [\#47](https://github.com/mlcast-community/mlcast-dataset-validator/pull/47), @leifdenby
+- `check_mlcast_metadata` takes `require_identifier` so that a spec can leave out the dataset identifier attributes [\#47](https://github.com/mlcast-community/mlcast-dataset-validator/pull/47), @leifdenby
+- `check_mlcast_metadata` takes `require_created_by`, `require_created_with` and `require_dataset_repo_naming`, so that a spec can make `mlcast_created_by`/`mlcast_created_with` optional (still validated when present) and accept any GitHub repository in `mlcast_created_with`. The `verification/forecast_scoring_metrics` spec uses this (§5.4), because score files are written by a verification tool rather than built by an `mlcast-dataset-*` repository. The source data specs are unchanged [\#47](https://github.com/mlcast-community/mlcast-dataset-validator/pull/47), @leifdenby
+- `ValidationReport.in_section()` relabels the results of a reused check to the section numbering of the spec using it [\#47](https://github.com/mlcast-community/mlcast-dataset-validator/pull/47), @leifdenby
+
 ## [v0.4.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.4.0)
 
 This release tightens the radar precipitation spec (now version 0.3.0) with new MUST requirements on CF attributes of spatial coordinates and the grid mapping, full-domain spatial chunking, and a required `mlcast_dataset_validator_version` global attribute. Existing datasets may need updating to pass. The spec scope is also expanded to include single-radar products.

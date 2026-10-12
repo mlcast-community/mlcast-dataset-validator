@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack, contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import wraps
 from typing import Callable, Dict, List, Optional, Tuple
 from unittest import mock
@@ -80,6 +80,25 @@ class ValidationReport:
             None
         """
         self.results.append(Result(section, requirement, status, detail))
+
+    def in_section(self, section: str) -> "ValidationReport":
+        """
+        Return a copy of the report with all results assigned to `section`.
+
+        Checks tag their results with the section number of the specification
+        they were first written for. A specification that numbers its sections
+        differently can use this to relabel the results of a reused check.
+
+        Args:
+            section (str): The section the results should be reported under.
+
+        Returns:
+            ValidationReport: A new report with relabelled results.
+        """
+        return ValidationReport(
+            ok=self.ok,
+            results=[replace(result, section=section) for result in self.results],
+        )
 
     def summarize(self) -> str:
         """

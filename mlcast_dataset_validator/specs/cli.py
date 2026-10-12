@@ -12,6 +12,7 @@ import xarray as xr
 from loguru import logger
 
 from .. import __version__
+from ..checks.global_attributes.zarr_format import NETCDF_SUFFIXES
 from .reporting import skip_all_checks
 
 SPEC_PACKAGE = "mlcast_dataset_validator.specs"
@@ -44,6 +45,13 @@ def _discover_catalog() -> Dict[str, List[str]]:
             catalog[data_stage] = sorted(product_names)
 
     return catalog
+
+
+def _open_dataset(dataset_path: str, storage_options: dict) -> xr.Dataset:
+    """Open a netCDF file (by suffix) or otherwise a Zarr store."""
+    if dataset_path.lower().endswith(NETCDF_SUFFIXES):
+        return xr.open_dataset(dataset_path)
+    return xr.open_zarr(dataset_path, storage_options=storage_options or None)
 
 
 def _format_catalog(catalog: Dict[str, Sequence[str]]) -> str:
@@ -80,7 +88,7 @@ def build_parser(catalog: Dict[str, List[str]]) -> argparse.ArgumentParser:
         "dataset_path",
         type=str,
         nargs="?",
-        help="Path or URL to the Zarr dataset to validate.",
+        help="Path or URL to the Zarr dataset (or path to the netCDF file) to validate.",
     )
     parser.add_argument(
         "--s3-endpoint-url",
@@ -189,7 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(spec_text)
         return 0
     else:
-        ds = xr.open_zarr(args.dataset_path, storage_options=storage_options or None)
+        ds = _open_dataset(args.dataset_path, storage_options)
         if storage_options:
             ds.encoding.setdefault("storage_options", storage_options)
         logger.info(

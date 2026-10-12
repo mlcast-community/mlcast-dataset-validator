@@ -43,6 +43,15 @@ def test_different_validator_version_warns():
     assert "0.3.0" in result.detail and "0.4.0" in result.detail
 
 
+def test_identifier_not_required_when_disabled():
+    def identifier_results(**kwargs):
+        report = check_mlcast_metadata(xr.Dataset(), **kwargs)
+        return [r for r in report.results if "identifier" in r.requirement]
+
+    assert any(r.status == "FAIL" for r in identifier_results())
+    assert identifier_results(require_identifier=False) == []
+
+
 def test_development_build_matches_its_release(monkeypatch):
     # builds from main between releases have versions like 0.4.0.dev3+g1234abc,
     # which should match datasets that conform to the upcoming 0.4.0 release

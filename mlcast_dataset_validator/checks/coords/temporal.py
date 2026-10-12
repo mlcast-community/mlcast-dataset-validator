@@ -386,3 +386,137 @@ def analyze_dataset_timesteps(ds: xr.Dataset) -> tuple[bool, int]:
     except TypeError:
         pass
     return result
+
+
+@log_function_call
+def check_forecast_case_coverage(
+    ds: xr.Dataset,
+    *,
+    dim: str = "init_time",
+    min_blocks: int = 4,
+    block_days: float = 10,
+) -> ValidationReport:
+    """
+    Check that the forecast cases (initialisation times) are ordered and
+    numerous enough for a moving-block bootstrap over them.
+
+    The block length is derived from the median spacing of the cases as the
+    number of cases covering `block_days`, and at least `min_blocks` such
+    blocks of cases are recommended (the default of mlwp-scorecard).
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset to validate.
+    dim : str, optional
+        Name of the dimension holding the forecast cases.
+    min_blocks : int, optional
+        Minimum number of blocks of cases recommended.
+    block_days : float, optional
+        Time span (in days) each block of cases covers.
+
+    Returns
+    -------
+    ValidationReport
+        Report with WARNINGs for unordered or too few forecast cases.
+    """
+    report = ValidationReport()
+
+    if dim not in ds.coords or not np.issubdtype(ds[dim].dtype, np.datetime64):
+        report.add(
+            SECTION_ID,
+            f"Forecast case coverage ('{dim}')",
+            "FAIL",
+            f"Cannot assess coverage, '{dim}' is not a datetime64 coordinate",
+        )
+        return report
+
+    values = ds[dim].values
+    diffs = np.diff(values)
+    if np.all(diffs > np.timedelta64(0, "ns")):
+        report.add(
+            SECTION_ID,
+            f"Ordering of '{dim}'",
+            "PASS",
+            f"'{dim}' is monotonically increasing",
+        )
+    else:
+        report.add(
+            SECTION_ID,
+            f"Ordering of '{dim}'",
+            "WARNING",
+            f"'{dim}' SHOULD be monotonically increasing",
+        )
+
+    sorted_diffs = np.diff(np.unique(values))
+    if sorted_diffs.size == 0:
+        report.add(
+            SECTION_ID,
+            f"Forecast case coverage ('{dim}')",
+            "WARNING",
+            f"Only {values.size} distinct forecast case(s), the case spacing "
+            "cannot be determined",
+        )
+        return report
+
+    spacing = np.median(sorted_diffs)
+    block = max(1, int(np.ceil(np.timedelta64(int(block_days * 86400), "s") / spacing)))
+    n_required = min_blocks * block
+    detail = (
+        f"{values.size} forecast cases with median spacing "
+        f"{pd.Timedelta(spacing)}; {min_blocks} blocks of {block} cases "
+        f"({block_days:g} days) require at least {n_required}"
+    )
+    if values.size >= n_required:
+        report.add(SECTION_ID, f"Forecast case coverage ('{dim}')", "PASS", detail)
+    else:
+        report.add(SECTION_ID, f"Forecast case coverage ('{dim}')", "WARNING", detail)
+
+    return report
+
+
+@log_function_call
+def check_lead_time(ds: xr.Dataset, *, dim: str = "lead_time") -> ValidationReport:
+    """
+    Check that lead times are non-negative time intervals.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset to validate.
+    dim : str, optional
+        Name of the lead time dimension.
+
+    Returns
+    -------
+    ValidationReport
+        Report with a FAIL if any lead time is negative or not a timedelta.
+    """
+    report = ValidationReport()
+
+    if dim not in ds.coords or not np.issubdtype(ds[dim].dtype, np.timedelta64):
+        report.add(
+            SECTION_ID,
+            f"Lead times ('{dim}')",
+            "FAIL",
+            f"'{dim}' is not a timedelta64 coordinate",
+        )
+        return report
+
+    n_negative = int((ds[dim].values < np.timedelta64(0, "ns")).sum())
+    if n_negative == 0:
+        report.add(
+            SECTION_ID,
+            f"Lead times ('{dim}')",
+            "PASS",
+            f"All {ds[dim].size} lead times are non-negative",
+        )
+    else:
+        report.add(
+            SECTION_ID,
+            f"Lead times ('{dim}')",
+            "FAIL",
+            f"{n_negative} lead time(s) are negative",
+        )
+
+    return report

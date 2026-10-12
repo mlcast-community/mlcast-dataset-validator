@@ -139,7 +139,9 @@ def parse_created_by(value: str) -> Dict[str, str]:
     return {"name": name, "email": email}
 
 
-def parse_github_url_with_version(value: str) -> Dict[str, str]:
+def parse_github_url_with_version(
+    value: str, *, require_dataset_repo_naming: bool = True
+) -> Dict[str, str]:
     """
     Parse GitHub URL with version suffix and enforce mlcast conventions.
 
@@ -147,6 +149,10 @@ def parse_github_url_with_version(value: str) -> Dict[str, str]:
     ----------
     value : str
         URL string to parse.
+    require_dataset_repo_naming : bool, optional
+        Whether to require the repository to be in the mlcast-community
+        organisation and named 'mlcast-dataset-{organisation_id}-{dataset_name}'.
+        Defaults to True.
 
     Returns
     -------
@@ -171,6 +177,8 @@ def parse_github_url_with_version(value: str) -> Dict[str, str]:
         raise ValueError("Missing org, repo, or version")
     if any(any(ch.isspace() for ch in part) for part in (org, repo, version)):
         raise ValueError("Contains whitespace in org/repo/version")
+    if not require_dataset_repo_naming:
+        return {"org": org, "repo": repo, "version": version}
     if org != EXPECTED_GITHUB_ORG:
         raise ValueError(f"GitHub organisation must be '{EXPECTED_GITHUB_ORG}'")
     parsed_repo = _EXPECTED_REPO_PARSER.parse(repo)
@@ -379,7 +387,14 @@ def parse_dataset_identifier(value: str, format_str: str) -> Dict[str, str]:
 
 
 @log_function_call
-def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
+def check_mlcast_metadata(
+    ds: xr.Dataset,
+    *,
+    require_identifier: bool = True,
+    require_created_by: bool = True,
+    require_created_with: bool = True,
+    require_dataset_repo_naming: bool = True,
+) -> ValidationReport:
     """
     Validate required MLCast-specific global attributes.
 
@@ -387,6 +402,21 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
     ----------
     ds : xarray.Dataset
         Dataset to validate.
+    require_identifier : bool, optional
+        Whether to require and validate the `mlcast_dataset_identifier` (and
+        optional `mlcast_dataset_identifier_format`) attributes. Defaults to
+        True.
+    require_created_by : bool, optional
+        Whether `mlcast_created_by` is required. When False, the attribute is
+        still validated if present. Defaults to True.
+    require_created_with : bool, optional
+        Whether `mlcast_created_with` is required. When False, the attribute is
+        still validated if present. Defaults to True.
+    require_dataset_repo_naming : bool, optional
+        Whether `mlcast_created_with` must point to a repository named
+        'mlcast-dataset-{organisation_id}-{dataset_name}' in the
+        mlcast-community organisation. When False, any GitHub URL with an
+        @version suffix is accepted. Defaults to True.
 
     Returns
     -------
@@ -398,16 +428,19 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
     mlcast_created_on
         ISO 8601 datetime string for dataset creation.
     mlcast_created_by
-        Creator contact in 'Name <email>' format.
+        Creator contact in 'Name <email>' format (optional when
+        `require_created_by` is False).
     mlcast_created_with
-        GitHub URL of the creating software including version.
+        GitHub URL of the creating software including version (optional when
+        `require_created_with` is False).
     mlcast_dataset_version
         Dataset specification version (semver or calver).
     mlcast_dataset_validator_version
         Version of mlcast-dataset-validator that the dataset conforms to. A
         version other than the one running the validation gives a warning.
     mlcast_dataset_identifier
-        Dataset identifier matching the dataset identifier format rules.
+        Dataset identifier matching the dataset identifier format rules (only
+        when `require_identifier` is True).
 
     Optional global attributes
     --------------------------
@@ -445,7 +478,14 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
             )
 
     created_by = attrs.get("mlcast_created_by")
-    if created_by is None:
+    if created_by is None and not require_created_by:
+        report.add(
+            SECTION_ID,
+            "Global attribute 'mlcast_created_by'",
+            "PASS",
+            "Optional creator contact not given",
+        )
+    elif created_by is None:
         report.add(
             SECTION_ID,
             "Global attribute 'mlcast_created_by'",
@@ -473,7 +513,14 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
             )
 
     created_with = attrs.get("mlcast_created_with")
-    if created_with is None:
+    if created_with is None and not require_created_with:
+        report.add(
+            SECTION_ID,
+            "Global attribute 'mlcast_created_with'",
+            "PASS",
+            "Optional creator software GitHub URL not given",
+        )
+    elif created_with is None:
         report.add(
             SECTION_ID,
             "Global attribute 'mlcast_created_with'",
@@ -482,7 +529,9 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
         )
     else:
         try:
-            parsed_created_with = parse_github_url_with_version(created_with)
+            parsed_created_with = parse_github_url_with_version(
+                created_with, require_dataset_repo_naming=require_dataset_repo_naming
+            )
             url_detail = (
                 f"Creator software GitHub URL parsed "
                 f"({parsed_created_with['org']}/{parsed_created_with['repo']}@{parsed_created_with['version']})"
@@ -632,6 +681,9 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
                     f"mlcast-dataset-validator=={parsed_validator_version} to check "
                     "the version it claims",
                 )
+
+    if not require_identifier:
+        return report
 
     dataset_identifier_format = attrs.get(DATASET_IDENTIFIER_FORMAT_ATTRIBUTE)
     format_ok = True

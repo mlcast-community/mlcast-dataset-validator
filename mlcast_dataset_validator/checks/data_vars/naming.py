@@ -155,3 +155,73 @@ def check_names_and_attrs(
             )
 
     return report
+
+
+def split_metric_variable_name(name: str, separator: str = ".") -> tuple[str, str]:
+    """
+    Split a `{metric}{separator}{variable}` name on the last separator.
+
+    Raises
+    ------
+    ValueError
+        If the name has no separator, or either part is empty.
+    """
+    metric, sep, variable = name.rpartition(separator)
+    if not sep or not metric or not variable:
+        raise ValueError(
+            f"'{name}' is not of the form '{{metric}}{separator}{{variable}}'"
+        )
+    return metric, variable
+
+
+@log_function_call
+def check_metric_variable_naming(
+    ds: xr.Dataset, *, separator: str = "."
+) -> ValidationReport:
+    """
+    Check that every data variable is named `{metric}{separator}{variable}`.
+
+    The name is split on the last separator, so the metric part may itself
+    contain the separator (e.g. `seeps.v1.5.tp` is metric `seeps.v1.5` of
+    variable `tp`), but both parts must be non-empty.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset whose data variables should be evaluated.
+    separator : str, optional
+        Separator between metric and variable name.
+
+    Returns
+    -------
+    ValidationReport
+        Report with one result per data variable.
+    """
+    report = ValidationReport()
+
+    names = [name for name, _ in iter_data_vars(ds)]
+    if not names:
+        report.add(
+            SECTION_ID,
+            "Metric variable naming",
+            "FAIL",
+            "Dataset contains no data variables",
+        )
+        return report
+
+    for name in names:
+        try:
+            metric, variable = split_metric_variable_name(str(name), separator)
+        except ValueError as exc:
+            report.add(
+                SECTION_ID, f"Metric variable naming for '{name}'", "FAIL", str(exc)
+            )
+        else:
+            report.add(
+                SECTION_ID,
+                f"Metric variable naming for '{name}'",
+                "PASS",
+                f"metric '{metric}' of variable '{variable}'",
+            )
+
+    return report

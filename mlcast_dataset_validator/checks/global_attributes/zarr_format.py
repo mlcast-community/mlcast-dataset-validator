@@ -9,6 +9,8 @@ from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.3"
 
+NETCDF_SUFFIXES = (".nc", ".nc4", ".cdf")
+
 
 def _has_consolidated_metadata(store_path: str, storage_options=None):
     """
@@ -89,6 +91,7 @@ def check_zarr_format(
     *,
     allowed_versions: Sequence[int],
     require_consolidated_if_v2: bool,
+    allow_netcdf: bool = False,
 ) -> ValidationReport:
     """
     Validate Zarr format compatibility and consolidated metadata requirements.
@@ -101,6 +104,10 @@ def check_zarr_format(
         Zarr format versions accepted by the specification.
     require_consolidated_if_v2 : bool
         Whether Zarr v2 datasets must include consolidated metadata.
+    allow_netcdf : bool, optional
+        Whether a dataset read from a netCDF file (a source path ending in one
+        of `NETCDF_SUFFIXES`) is also accepted, in which case the Zarr checks
+        are skipped. Defaults to False.
 
     Returns
     -------
@@ -124,6 +131,23 @@ def check_zarr_format(
                 "Consolidated metadata presence",
                 "FAIL",
                 "Cannot verify consolidated metadata because dataset source path is missing.",
+            )
+        return report
+
+    if str(store_path).lower().endswith(NETCDF_SUFFIXES):
+        if allow_netcdf:
+            report.add(
+                SECTION_ID,
+                "Storage format",
+                "PASS",
+                f"Dataset is stored as netCDF ({store_path})",
+            )
+        else:
+            report.add(
+                SECTION_ID,
+                "Zarr version compatibility",
+                "FAIL",
+                f"Dataset is stored as netCDF ({store_path}), but Zarr is required",
             )
         return report
 
