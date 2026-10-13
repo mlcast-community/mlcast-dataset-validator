@@ -255,7 +255,7 @@ def validate_dataset(ds: xr.Dataset) -> ValidationReport:
     The dataset MUST include the following global attributes:
 
     - `mlcast_created_on`: ISO formatted datetime of dataset creation.
-    - `mlcast_created_by`: Creator contact in `Name <email>` format.
+    - `mlcast_created_by`: Creator contact in `Name <email>` format. Multiple creators MAY be given as a comma-separated list (e.g., `A <a@x.org>, B <b@y.org>`).
     - `mlcast_created_with`: GitHub URL of the creating software including version (e.g., https://github.com/mlcast-community/mlcast-dataset-radklim@v0.1.0) and the repository/revision MUST exist.
     - `mlcast_dataset_version`: Dataset specification version (semver or calver).
     - `mlcast_dataset_validator_version`: Version of `mlcast-dataset-validator` that the dataset conforms to (e.g., `0.4.0`). It SHOULD match the version of the validator being run.

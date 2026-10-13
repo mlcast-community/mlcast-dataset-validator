@@ -1,7 +1,7 @@
 """Global attribute validators for MLCast metadata."""
 
 import string
-from typing import Dict
+from typing import Dict, List
 
 import isodate
 import requests
@@ -19,6 +19,7 @@ from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.4"
 CREATED_BY_FORMAT = "{name} <{email}>"
+CREATED_BY_DESCRIPTION = "'Name <email>' format (comma-separated for multiple creators)"
 GITHUB_WITH_VERSION_FORMAT = "https://github.com/{org}/{repo}@{version}"
 DEFAULT_DATASET_IDENTIFIER_FORMAT = "{country_code}-{entity}-{physical_variable}"
 DATASET_IDENTIFIER_ATTRIBUTE = "mlcast_dataset_identifier"
@@ -137,6 +138,40 @@ def parse_created_by(value: str) -> Dict[str, str]:
     if any(ch.isspace() for ch in email):
         raise ValueError("Email contains whitespace")
     return {"name": name, "email": email}
+
+
+def parse_created_by_list(value: str) -> List[Dict[str, str]]:
+    """
+    Parse one or more creators given as comma-separated 'Name <email>' entries.
+
+    Parameters
+    ----------
+    value : str
+        Creator string to parse, e.g. 'A <a@x.org>, B <b@y.org>'.
+
+    Returns
+    -------
+    list of dict
+        One dictionary with keys 'name' and 'email' per creator.
+
+    Raises
+    ------
+    ValueError
+        If the value is not a string, contains an empty entry, or any entry
+        does not match 'Name <email>'.
+    """
+    if not isinstance(value, str):
+        raise ValueError("Value is not a string")
+    creators = []
+    for entry in value.split(","):
+        entry = entry.strip()
+        if not entry:
+            raise ValueError("Empty creator entry")
+        try:
+            creators.append(parse_created_by(entry))
+        except ValueError as exc:
+            raise ValueError(f"Entry '{entry}': {exc}") from exc
+    return creators
 
 
 def parse_github_url_with_version(value: str) -> Dict[str, str]:
@@ -398,7 +433,8 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
     mlcast_created_on
         ISO 8601 datetime string for dataset creation.
     mlcast_created_by
-        Creator contact in 'Name <email>' format.
+        Creator contact in 'Name <email>' format; multiple creators may be
+        given as a comma-separated list.
     mlcast_created_with
         GitHub URL of the creating software including version.
     mlcast_dataset_version
@@ -450,14 +486,13 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
             SECTION_ID,
             "Global attribute 'mlcast_created_by'",
             "FAIL",
-            "Missing required creator contact in 'Name <email>' format",
+            f"Missing required creator contact in {CREATED_BY_DESCRIPTION}",
         )
     else:
         try:
-            parsed_by = parse_created_by(created_by)
-            detail = (
-                f"Creator contact present ({parsed_by['name']} <{parsed_by['email']}>)"
-            )
+            creators = parse_created_by_list(created_by)
+            contacts = ", ".join(f"{c['name']} <{c['email']}>" for c in creators)
+            detail = f"Creator contact(s) present ({contacts})"
             report.add(
                 SECTION_ID,
                 "Global attribute 'mlcast_created_by'",
@@ -469,7 +504,7 @@ def check_mlcast_metadata(ds: xr.Dataset) -> ValidationReport:
                 SECTION_ID,
                 "Global attribute 'mlcast_created_by'",
                 "FAIL",
-                f"Creator contact '{created_by}' is not in 'Name <email>' format: {exc}",
+                f"Creator contact '{created_by}' is not in {CREATED_BY_DESCRIPTION}: {exc}",
             )
 
     created_with = attrs.get("mlcast_created_with")
