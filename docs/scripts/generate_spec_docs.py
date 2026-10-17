@@ -131,7 +131,7 @@ def _render_spec_page(
         f"{data_stage} {product} <PATH_OR_URL>"
     )
     command_source = (
-        'uvx --from "git+https://github.com/mlcast-community/mlcast-sourcedata-validator" '
+        'uvx --from "git+https://github.com/mlcast-community/mlcast-dataset-validator" '
         f"mlcast.validate_dataset {data_stage} {product} <PATH_OR_URL>"
     )
     version = Version(__version__)

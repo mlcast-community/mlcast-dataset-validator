@@ -1,7 +1,7 @@
 site_name: MLCast Dataset Specifications
 site_description: Rendered specifications for the MLCast dataset validator.
-repo_url: https://github.com/mlcast-community/mlcast-sourcedata-validator
-repo_name: mlcast-community/mlcast-sourcedata-validator
+repo_url: https://github.com/mlcast-community/mlcast-dataset-validator
+repo_name: mlcast-community/mlcast-dataset-validator
 theme:
   name: material
   features:
