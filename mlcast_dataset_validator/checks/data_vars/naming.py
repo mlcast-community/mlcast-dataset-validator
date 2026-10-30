@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Optional, Sequence
 
+import numpy as np
 import xarray as xr
 
 from ...specs.reporting import ValidationReport, log_function_call
-from ..data_vars_filter import iter_data_vars
+from ..data_vars_filter import iter_data_vars, select_data_vars_by_role
 from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.4"
@@ -43,7 +44,10 @@ _CF_RULES: Dict[str, Dict[str, Iterable[str]]] = {
 
 @log_function_call
 def check_names_and_attrs(
-    ds: xr.Dataset, *, allowed_standard_names: Iterable[str]
+    ds: xr.Dataset,
+    *,
+    allowed_standard_names: Iterable[str],
+    roles: Optional[Sequence[str]] = None,
 ) -> ValidationReport:
     """
     Validate that data variables match the expected CF naming/attribute rules.
@@ -56,6 +60,10 @@ def check_names_and_attrs(
         CF `standard_name` values that this spec considers valid. Every data
         variable encountered must declare a standard name from this list; any
         other names will trigger failures.
+    roles : Sequence[str], optional
+        Only check the data variables with these roles (see
+        :func:`~mlcast_dataset_validator.checks.data_vars_filter.classify_data_vars`).
+        By default all data variables are checked.
 
     Returns
     -------
@@ -63,6 +71,8 @@ def check_names_and_attrs(
         A report containing PASS/FAIL/WARNING entries for each relevant variable.
     """
     report = ValidationReport()
+    if roles is not None:
+        ds = select_data_vars_by_role(ds, roles)
 
     allowed_standard_names = {name.lower() for name in allowed_standard_names}
     for spec_name in allowed_standard_names:
@@ -154,4 +164,62 @@ def check_names_and_attrs(
                 f"Units '{units}' match the CF canonical unit.",
             )
 
+    return report
+
+
+@log_function_call
+def check_required_attrs(
+    ds: xr.Dataset,
+    *,
+    required: Sequence[str] = ("long_name", "units"),
+    roles: Optional[Sequence[str]] = None,
+) -> ValidationReport:
+    """
+    Validate that every data variable carries the given attributes.
+
+    For datetime variables xarray moves ``units`` from the attributes into the
+    encoding when decoding times, so for those ``units`` is also accepted from
+    the encoding.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        Dataset whose data variables (other than grid mapping definitions)
+        should be evaluated.
+    required : Sequence[str], optional
+        Attributes that every data variable must carry, by default
+        ``("long_name", "units")``.
+    roles : Sequence[str], optional
+        Only check the data variables with these roles (see
+        :func:`~mlcast_dataset_validator.checks.data_vars_filter.classify_data_vars`).
+        By default all data variables are checked.
+
+    Returns
+    -------
+    ValidationReport
+        A report with one PASS or FAIL entry per data variable.
+    """
+    report = ValidationReport()
+    if roles is not None:
+        ds = select_data_vars_by_role(ds, roles)
+    for var_name, da in iter_data_vars(ds):
+        present = set(da.attrs)
+        if np.issubdtype(da.dtype, np.datetime64) and "units" in da.encoding:
+            present.add("units")
+        missing = [attr for attr in required if attr not in present]
+        requirement = f"Required attributes for {var_name}"
+        if missing:
+            report.add(
+                SECTION_ID,
+                requirement,
+                "FAIL",
+                f"Data variable '{var_name}' is missing attribute(s): {missing}",
+            )
+        else:
+            report.add(
+                SECTION_ID,
+                requirement,
+                "PASS",
+                f"Data variable '{var_name}' has {list(required)}",
+            )
     return report

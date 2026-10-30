@@ -41,6 +41,19 @@ def check_temporal_requirements(
         return report
 
     da_time_coord = ds["time"]
+    if np.issubdtype(da_time_coord.dtype, np.datetime64):
+        n_nat = int(np.isnat(da_time_coord.values).sum())
+        if n_nat:
+            report.add(
+                SECTION_ID,
+                "Time coordinate values",
+                "FAIL",
+                f"Time coordinate contains {n_nat} NaT (not-a-time) value(s) out of "
+                f"{da_time_coord.size}. Times without data must be left out of the time "
+                "coordinate and listed in 'missing_times' instead",
+            )
+            return report
+
     if da_time_coord.size >= 2:
         da_time_diffs = da_time_coord.diff("time")
         if not np.all(da_time_diffs.values > np.timedelta64(0, "ns")):
@@ -56,17 +69,18 @@ def check_temporal_requirements(
         time_coord = pd.to_datetime(ds.time.values)
         time_range = time_coord[-1] - time_coord[0]
         years = time_range.days / 365.25
+        coverage_label = f"Minimum {min_years}-year coverage"
         if years >= min_years:
             report.add(
                 SECTION_ID,
-                "Minimum 3-year coverage",
+                coverage_label,
                 "PASS",
                 f"Temporal coverage: {years:.1f} years (≥{min_years} years)",
             )
         else:
             report.add(
                 SECTION_ID,
-                "Minimum 3-year coverage",
+                coverage_label,
                 "FAIL",
                 f"Temporal coverage: {years:.1f} years (<{min_years} years required)",
             )

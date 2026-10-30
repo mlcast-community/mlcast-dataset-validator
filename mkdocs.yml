@@ -22,5 +22,6 @@ nav:
   - Home: index.md
   # -- specs-nav-begin --
   - Source data:
+      - Geostationary satellite counts: specs/source_data/geostationary_satellite_counts.md
       - Radar precipitation: specs/source_data/radar_precipitation.md
 # -- specs-nav-end --

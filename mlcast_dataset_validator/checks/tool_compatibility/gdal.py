@@ -35,7 +35,9 @@ except Exception:  # pragma: no cover - graceful fallback
     RIOXARRAY_AVAILABLE = False
 
 
-def _select_data_variable(ds: xr.Dataset, preferred: Optional[str]) -> Optional[str]:
+def _select_data_variable(
+    ds: xr.Dataset, preferred: Optional[str], role: Optional[str] = None
+) -> Optional[str]:
     """
     Choose the data variable that will be exported for GDAL testing.
 
@@ -45,13 +47,15 @@ def _select_data_variable(ds: xr.Dataset, preferred: Optional[str]) -> Optional[
         Dataset that will be validated.
     preferred : str or None
         Caller-provided variable name to prioritize.
+    role : str or None
+        Only consider data variables with this role.
 
     Returns
     -------
     Optional[str]
         Name of the data variable to use, or None if unavailable.
     """
-    return select_data_var(ds, preferred, require_grid_mapping=True)
+    return select_data_var(ds, preferred, require_grid_mapping=True, role=role)
 
 
 def _prepare_sample_slice(data_array: xr.DataArray) -> xr.DataArray:
@@ -71,6 +75,12 @@ def _prepare_sample_slice(data_array: xr.DataArray) -> xr.DataArray:
     sample = data_array
     if "time" in sample.dims:
         sample = sample.isel(time=0, drop=True)
+    if {"y", "x"}.issubset(sample.dims):
+        # take the first element along any other dims (e.g. `channel`) so the
+        # sample is a single (y, x) raster
+        sample = sample.isel(
+            {dim: 0 for dim in sample.dims if dim not in ("y", "x")}, drop=True
+        ).transpose("y", "x")
     sample = sample.squeeze(drop=True)
 
     spatial_dims = [dim for dim in sample.dims if dim not in {"time", "t"}]
@@ -103,6 +113,7 @@ def check_gdal_compatibility(
     ds: xr.Dataset,
     *,
     data_variable: Optional[str] = None,
+    role: Optional[str] = None,
 ) -> ValidationReport:
     """
     Validate GDAL tool compatibility for a dataset.
@@ -120,6 +131,10 @@ def check_gdal_compatibility(
         Dataset opened via xarray.
     data_variable : str, optional
         Specific data variable to export; defaults to the first data variable.
+    role : str, optional
+        Only consider data variables with this role (see
+        :func:`~mlcast_dataset_validator.checks.data_vars_filter.classify_data_vars`),
+        e.g. ``"observation"``.
 
     Returns
     -------
@@ -138,7 +153,7 @@ def check_gdal_compatibility(
         )
         return report
 
-    target_var = _select_data_variable(ds, data_variable)
+    target_var = _select_data_variable(ds, data_variable, role)
     if target_var is None:
         report.add(
             SECTION_ID,
