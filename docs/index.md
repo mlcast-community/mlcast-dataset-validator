@@ -7,4 +7,5 @@ and product, and provides the exact validation requirements used by the CLI.
 Available specifications:
 
 - Source data
+    - [Geostationary satellite counts](specs/source_data/geostationary_satellite_counts.md)
     - [Radar precipitation](specs/source_data/radar_precipitation.md)

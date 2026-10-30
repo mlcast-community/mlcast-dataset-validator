@@ -43,6 +43,8 @@ The validator checks both **specification compliance** and **practical tool comp
     - cartopy can create CRS objects and transform coordinates
     - Cross-tool CRS consistency checks
 
+For geostationary satellite imagery, the [`geostationary_satellite_counts` spec](mlcast_dataset_validator/specs/source_data/geostationary_satellite_counts.py) covers raw detector counts stored together with their calibration coefficients (e.g. MTG FCI Level 1c). It requires data on the native geostationary grid with one dataset per native resolution, dimensions `time × y × x × channel` with string channel labels, and CF geostationary grid mapping attributes that agree with the stored latitude/longitude (NaN off the disc).
+
 ## How is the tool implemented?
 
 1. **Spec modules are organized by data stage/product**
@@ -61,6 +63,7 @@ The validator checks both **specification compliance** and **practical tool comp
 mlcast_dataset_validator/
 ├── specs/
 │   ├── source_data/
+│   │   ├── geostationary_satellite_counts.py
 │   │   └── radar_precipitation.py
 │   ├── training_data/
 │   │   └── ... (no specs yet)

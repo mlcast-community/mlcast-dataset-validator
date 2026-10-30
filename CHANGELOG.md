@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- New `source_data/geostationary_satellite_counts` spec (version 0.1.0) for raw detector counts from geostationary satellite imagers, stored with their calibration coefficients (first use case: MTG FCI Level 1c from EUMETSAT). New checks for it: a labelled `channel` coordinate (§3.4), counts linked to their calibration coefficients through `ancillary_variables` (§4.6), and `platform`/`instrument` global attributes (§5.5). Closes [\#40](https://github.com/mlcast-community/mlcast-dataset-validator/issues/40) [\#49](https://github.com/mlcast-community/mlcast-dataset-validator/pull/49), @leifdenby
+- Checks can now be restricted to data variables with given roles (observation, quality flag, per-pixel time, calibration, auxiliary), which are classified from CF metadata: `roles=` on the data structure, naming and georeferencing checks, `role=` on the GDAL and cartopy checks, and `time_dependent_only=` on the chunking check. `check_spatial_requirements` takes `spatial_dims=` so that non-spatial dimensions such as `channel` are not counted as spatial, and `check_data_structure` can check the on-disk dtype with `use_encoded_dtype=` [\#49](https://github.com/mlcast-community/mlcast-dataset-validator/pull/49), @leifdenby
+- The cartopy check can build the projection from the CF grid mapping attributes (`crs_source="cf"`), as cartopy cannot build a plottable geostationary projection from WKT [\#49](https://github.com/mlcast-community/mlcast-dataset-validator/pull/49), @leifdenby
+
+### Fixed
+
+- The temporal check now fails with a clear message when the time coordinate contains NaT values. Previously this was reported as the time coordinate not being strictly increasing [\#49](https://github.com/mlcast-community/mlcast-dataset-validator/pull/49), @leifdenby
+- The georeferencing check now leaves out sampled grid points without finite latitude/longitude (e.g. off the disc of a geostationary grid) instead of warning that the comparison could not be made [\#49](https://github.com/mlcast-community/mlcast-dataset-validator/pull/49), @leifdenby
+- The GDAL check now exports a single `(y, x)` slice of variables with extra dimensions such as `channel`. Previously the last two dimensions were renamed to `y`/`x`, whatever they were [\#49](https://github.com/mlcast-community/mlcast-dataset-validator/pull/49), @leifdenby
+
 ## [v0.4.0](https://github.com/mlcast-community/mlcast-dataset-validator/releases/tag/v0.4.0)
 
 This release tightens the radar precipitation spec (now version 0.3.0) with new MUST requirements on CF attributes of spatial coordinates and the grid mapping, full-domain spatial chunking, and a required `mlcast_dataset_validator_version` global attribute. Existing datasets may need updating to pass. The spec scope is also expanded to include single-radar products.

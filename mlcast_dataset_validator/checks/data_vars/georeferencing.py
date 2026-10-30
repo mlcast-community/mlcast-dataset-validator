@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 import xarray as xr
@@ -6,6 +6,7 @@ from pyproj import CRS, Transformer
 
 from ...specs.reporting import ValidationReport, log_function_call
 from ..coords.names import find_cf_coordinates
+from ..data_vars_filter import select_data_vars_by_role
 from . import SECTION_ID as PARENT_SECTION_ID
 
 SECTION_ID = f"{PARENT_SECTION_ID}.5"
@@ -48,6 +49,17 @@ def _sample_indices(n: int) -> list:
     return sorted({0, n // 2, n - 1})
 
 
+def _dense_sample_indices(n: int, count: int = 9) -> list:
+    """Indices of ``count`` evenly spaced elements (deduplicated, sorted)."""
+    return sorted({int(i) for i in np.linspace(0, n - 1, count).round()})
+
+
+# Number of evenly spaced samples per axis used when some of the default
+# samples have no valid latitude/longitude (e.g. off the disc of a
+# geostationary full-disc grid)
+_DENSE_SAMPLE_COUNT = 9
+
+
 def _wrap_lon_diff(diff: np.ndarray) -> np.ndarray:
     """Wrap longitude differences into [-180, 180)."""
     return (diff + 180.0) % 360.0 - 180.0
@@ -66,6 +78,11 @@ def _max_deviation_from_latlon(
 
     ``x_scale``/``y_scale`` convert the coordinate values to the units of
     ``crs`` (e.g. 1000 for coordinates stored in km and a CRS in metres).
+
+    Grid points whose stored latitude/longitude is not finite (e.g. off the
+    disc of a geostationary full-disc grid) are left out of the comparison.
+    If any of the default first/middle/last samples is such a point, a denser
+    set of samples is used instead.
     """
     x_name, y_name, lat_name, lon_name = coords
     x_dim, y_dim = ds[x_name].dims[0], ds[y_name].dims[0]
@@ -77,15 +94,32 @@ def _max_deviation_from_latlon(
 
     x = ds[x_name].values.astype(float) * x_scale
     y = ds[y_name].values.astype(float) * y_scale
-    ix, iy = _sample_indices(len(x)), _sample_indices(len(y))
-    px = np.array([x[i] for i in ix for j in iy])
-    py = np.array([y[j] for i in ix for j in iy])
-    lat_ref = (
-        ds[lat_name].isel({y_dim: iy, x_dim: ix}).transpose(x_dim, y_dim).values.ravel()
-    )
-    lon_ref = (
-        ds[lon_name].isel({y_dim: iy, x_dim: ix}).transpose(x_dim, y_dim).values.ravel()
-    )
+
+    def _sample(ix: list, iy: list) -> Tuple[np.ndarray, ...]:
+        px = np.array([x[i] for i in ix for j in iy])
+        py = np.array([y[j] for i in ix for j in iy])
+        lat_ref, lon_ref = (
+            ds[name]
+            .isel({y_dim: iy, x_dim: ix})
+            .transpose(x_dim, y_dim)
+            .values.ravel()
+            .astype(float)
+            for name in (lat_name, lon_name)
+        )
+        return px, py, lat_ref, lon_ref
+
+    px, py, lat_ref, lon_ref = _sample(_sample_indices(len(x)), _sample_indices(len(y)))
+    if not (np.isfinite(lat_ref).all() and np.isfinite(lon_ref).all()):
+        px, py, lat_ref, lon_ref = _sample(
+            _dense_sample_indices(len(x), _DENSE_SAMPLE_COUNT),
+            _dense_sample_indices(len(y), _DENSE_SAMPLE_COUNT),
+        )
+        valid = np.isfinite(lat_ref) & np.isfinite(lon_ref)
+        if not valid.any():
+            raise ValueError(
+                f"no sampled grid point has finite '{lat_name}'/'{lon_name}' values"
+            )
+        px, py, lat_ref, lon_ref = px[valid], py[valid], lat_ref[valid], lon_ref[valid]
 
     transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
     lon, lat = transformer.transform(px, py)
@@ -221,6 +255,7 @@ def check_georeferencing(
     require_bbox: bool,
     require_cf_grid_mapping: bool = False,
     latlon_tolerance_deg: float = 1e-4,
+    roles: Optional[Sequence[str]] = None,
 ) -> ValidationReport:
     """
     Check georeferencing requirements.
@@ -240,8 +275,15 @@ def check_georeferencing(
         latitude/longitude at sampled grid points. Defaults to False.
     latlon_tolerance_deg : float, optional
         Tolerance (degrees) for that comparison. Defaults to 1e-4 (about 10 m).
+    roles : Sequence[str], optional
+        Only check the data variables with these roles (see
+        :func:`~mlcast_dataset_validator.checks.data_vars_filter.classify_data_vars`),
+        e.g. to leave out calibration coefficients that have no spatial
+        dimensions. By default all data variables are checked.
     """
     report = ValidationReport()
+    if roles is not None:
+        ds = select_data_vars_by_role(ds, roles)
     # Find all grid_mapping data variables since we don't want to check those
     grid_mapping_vars = set()
     for var in ds.data_vars:

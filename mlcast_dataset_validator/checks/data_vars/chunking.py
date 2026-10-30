@@ -12,6 +12,7 @@ def check_chunking_strategy(
     ds: xr.Dataset,
     time_chunksize: int,
     require_full_spatial_chunks: bool = False,
+    time_dependent_only: bool = False,
 ) -> ValidationReport:
     """
     Validate the chunking strategy of the dataset.
@@ -21,6 +22,8 @@ def check_chunking_strategy(
         time_chunksize (int): Required chunk size for the time dimension.
         require_full_spatial_chunks (bool): Require a single chunk along every
             dimension after time, so that each chunk covers the whole domain.
+        time_dependent_only (bool): Only check data variables that have a
+            `time` dimension (e.g. skip per-channel labels or coefficients).
 
     Returns:
         ValidationReport: A report containing the results of the chunking strategy validation checks.
@@ -28,6 +31,8 @@ def check_chunking_strategy(
     report = ValidationReport()
 
     for data_var, data_array in iter_data_vars(ds):
+        if time_dependent_only and "time" not in data_array.dims:
+            continue
         if hasattr(data_array.data, "chunks"):
             chunks = data_array.data.chunks
             if len(chunks) >= 1 and all(c == time_chunksize for c in chunks[0]):
